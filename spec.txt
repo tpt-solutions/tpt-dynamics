@@ -1,0 +1,152 @@
+tpt-dynamics Design Specification (v0.1)
+1. Overview
+tpt-dynamics is a pure Rust, high-performance engine for large-scale physical simulation and data analysis. It serves as the unified, zero-FFI replacement for ROOT (petabyte-scale particle physics data analysis) and GROMACS (high-throughput classical molecular dynamics).
+While tpt-molecule focuses on cheminformatics and GPU-accelerated drug discovery, tpt-dynamics focuses on scale and throughput. It handles the simulation of massive biomolecular systems (millions of atoms in explicit solvent) and the analysis of petabyte-scale event data from particle colliders, leveraging tpt-math and tpt-simd for extreme vectorization.
+2. Design Goals
+Strict Permissive Licensing: Every dependency must be MIT, BSD, Zlib, Unicode, ISC, or Dual MIT/Apache-2.0. GPL, LGPL, AGPL, MPL, and "Apache-2.0 ONLY" crates are strictly banned.
+Zero-FFI & Memory Safety: No bindgen wrappers for C++ libraries (like ROOT's C++ core or GROMACS). All data parsing, histogramming, and N-body force calculations are written in safe Rust.
+Massive Scale Simulation: Unlike standard MD engines, tpt-dynamics is optimized for systems with millions of atoms (e.g., entire viral capsids or ribosomes) using advanced domain decomposition and parallel neighbor lists.
+Lazy Data Analysis: For HEP (High-Energy Physics), it implements a lazy-evaluation data frame model (similar to Polars but specialized for physics histograms and n-tuples) to process billions of collision events without loading them entirely into RAM.
+no_std Core: The foundational physics math (tpt-dynamics-core) supports no_std + alloc for deployment on FPGA controllers or embedded DAQ (Data Acquisition) systems.
+3. Workspace Architecture
+tpt-dynamics/
+├── tpt-dynamics-core/       # Shared units, physical constants, vector math (no_std)
+├── tpt-dynamics-data/       # ROOT replacement: Lazy data frames, histograms, RNTuple/Arrow I/O
+├── tpt-dynamics-sim/        # GROMACS replacement: Integrators, force fields, domain decomposition
+├── tpt-dynamics-compute/    # SIMD/GPU acceleration for N-body forces and data transforms
+├── tpt-dynamics-cli/        # The `tptdyn` unified command-line tool
+└── bindings/
+    └── tpt-dynamics-py/     # PyO3 bindings (MIT) for the broader Python physics ecosystem
+
+4. Crate Breakdown
+4.1 tpt-dynamics-core (The Foundation)
+Role: The no_std leaf crate. Contains physical constants (Planck, speed of light), unit conversions (eV to Joules, Angstroms to nm), and fundamental vector math.
+Dependencies: tpt-math (Internal), glam (MIT/Apache-2.0).
+4.2 tpt-dynamics-data (The ROOT Killer)
+Role: Handles the analysis of massive datasets typical in High-Energy Physics (HEP).
+Key Features:
+Lazy Data Frames: A query engine that compiles analysis logic (filtering, grouping, aggregating) into optimized execution plans, processing data in chunks to minimize memory usage.
+Physics Histograms: specialized 1D, 2D, and profile histograms with dynamic binning and efficient merging (crucial for distributed computing).
+Format Support: Zero-copy readers for columnar formats (Parquet/Arrow concepts via polars-style logic) and custom binary formats for detector data.
+Dependencies: polars (MIT/Apache-2.0) concepts or custom implementation, tpt-dynamics-core.
+4.3 tpt-dynamics-sim (The GROMACS Killer)
+Role: The engine for classical molecular dynamics of large biomolecular systems.
+Key Features:
+Domain Decomposition: MPI-like spatial decomposition (using rayon or mpi crates if licensed correctly, otherwise pure Rust message passing) to split simulation boxes across CPU cores.
+Neighbor Lists: Highly optimized Verlet lists and cell-list algorithms to track interactions in dense liquids.
+Integrators: Velocity Verlet and leap-frog integrators with constraints (SHAKE/LINCOLN algorithms for rigid water models).
+Force Fields: GROMOS, AMBER, and CHARMM parameter sets for proteins, lipids, and nucleic acids.
+Dependencies: tpt-dynamics-core, tpt-math (Internal), tpt-simd (Internal).
+4.4 tpt-dynamics-compute (The Accelerator)
+Role: Vectorizes the most expensive operations using tpt-simd.
+Key Features:
+N-Body Kernels: SIMD-accelerated loops for Lennard-Jones and Coulombic pairwise interactions.
+PME (Particle Mesh Ewald): FFT-based long-range electrostatics solver (using tpt-math's FFT) to handle periodic boundary conditions efficiently.
+Dependencies: tpt-simd (Internal), tpt-math (Internal).
+4.5 tpt-dynamics-cli & tpt-dynamics-py
+tpt-dynamics-cli: Fast, ergonomic CLI using clap (MIT/Apache-2.0) exposing commands like tptdyn analyze, tptdyn simulate, and tptdyn histogram.
+tpt-dynamics-py: PyO3 bindings (MIT). Allows integration into Python analysis scripts (replacing PyROOT).
+5. Licensing & Dependency Hardening (Critical)
+5.1 The "MIT-First" Policy
+To maintain maximum adoption and minimize legal friction, tpt-dynamics enforces the same zero-tolerance policy as previous repos.
+Allowed: MIT, Dual MIT/Apache-2.0, BSD (2/3-Clause), Zlib, Unicode, ISC.
+Strictly Banned: GPL (v2/v3), AGPL, LGPL, MPL, and Apache-2.0 ONLY.
+5.2 Automated Compliance via cargo-deny
+The repository includes a deny.toml configuration that fails the build if a banned license is introduced.
+deny.toml Configuration:
+[licenses]
+unlicensed = "deny"
+copyleft = "deny" # Blocks GPL, AGPL, LGPL, MPL
+confidence-threshold = 0.93
+
+allow = [
+    "MIT",
+    "Apache-2.0", 
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "Zlib",
+    "Unicode-3.0",
+    "ISC",
+]
+
+deny = [
+    "GPL-2.0", "GPL-3.0", "AGPL-3.0", "LGPL-2.1", "LGPL-3.0", "MPL-2.0",
+]
+
+# Ban specific crates known to cause licensing or FFI headaches in physics
+[[bans.deny]]
+name = "root"         # C++ FFI, complex licensing
+name = "gromacs"      # GPL/LGPL C++ dependency
+name = "geant4"       # C++ FFI
+name = "arrow"        # Apache-2.0 ONLY (if not dual-licensed in specific versions)
+
+Note: We prefer polars (MIT/Apache-2.0) over raw arrow if the latter is Apache-only in the dependency tree.
+5.3 Compliant Dependency Selection
+Legacy C/C++ Tool
+Banned/Problematic Rust Crate
+Approved tpt-dynamics Crate
+License
+ROOT
+root (C++ FFI)
+polars (Lazy frames), tpt-dynamics-data
+MIT / Apache-2.0
+GROMACS
+gromacs (GPL C++)
+tpt-dynamics-sim (Custom Rust MD)
+MIT / Apache-2.0
+MPI
+mpi (Can be complex)
+rayon (Shared memory), custom message passing
+MIT / Apache-2.0
+FFT
+fftw-sys (GPL C)
+tpt-math (Rust FFT)
+MIT / Apache-2.0
+Python Bindings
+cpython
+pyo3
+MIT
+6. Key Technical Decisions (ADRs)
+ADR-001: Pure Rust MD over FFI to GROMACS
+Decision: We will implement classical MD integrators and force fields from scratch in Rust rather than wrapping GROMACS.
+Rationale: GROMACS is GPL/LGPL, which instantly contaminates the workspace. Furthermore, GROMACS is a monolithic C++ codebase that is difficult to embed. By writing a modular Rust engine, we can easily swap force fields or integrators at runtime and leverage Rust's fearless concurrency for domain decomposition.
+ADR-002: Lazy Data Frames for HEP Analysis
+Decision: Data analysis will use a lazy-evaluation model (compiling queries to optimized execution plans) rather than eager evaluation.
+Rationale: HEP datasets (like those from the LHC) are often too large to fit in RAM. A lazy engine allows us to stream data from disk or network, applying filters and aggregations on the fly, similar to how Polars works but specialized for physics histograms and n-tuples.
+ADR-003: SIMD-Accelerated N-Body Kernels
+Decision: The inner loops of non-bonded force calculations will be written using tpt-simd.
+Rationale: MD simulations spend 90% of their time calculating pairwise forces. Naive Rust loops are insufficient. By using portable SIMD, we can achieve C++-level performance (comparable to GROMACS) on any architecture (x86, ARM) without writing architecture-specific assembly.
+7. Data Flow Example: Large-Scale Biomolecular Simulation
+To illustrate how the workspace operates, here is the data flow for simulating a viral capsid in water:
+System Setup (tpt-dynamics-sim): Reads a PDB/GRO file containing 2 million atoms (protein + lipid bilayer + water).
+Domain Decomposition (tpt-dynamics-sim): The simulation box is spatially decomposed into sub-domains, assigned to different CPU threads/cores.
+Neighbor List Build (tpt-dynamics-compute): Using SIMD-accelerated cell lists, the engine builds a Verlet list of interacting atoms for the next 10-20 steps.
+Force Calculation (tpt-dynamics-compute + tpt-simd):
+Short-range: Lennard-Jones and Coulombic forces for neighbors are calculated in parallel using SIMD intrinsics.
+Long-range: Particle Mesh Ewald (PME) is solved using tpt-math's FFT to handle periodic electrostatics.
+Integration (tpt-dynamics-sim): The Velocity Verlet integrator updates positions and velocities for the next time step.
+Output (tpt-dynamics-data): Trajectory data is streamed to disk in a compressed, columnar format (e.g., Zarr or custom binary) for later analysis.
+Analysis (tpt-dynamics-data): Post-simulation, the lazy data engine reads the trajectory to calculate RMSD, radius of gyration, and hydrogen bond counts without loading the full file into memory.
+8. Phased Roadmap (Solo Maintainer Strategy)
+Phase 1: Core & Data Engine (Months 1-3)
+Scaffold the Cargo workspace.
+Implement tpt-dynamics-core (units, constants).
+Implement tpt-dynamics-data: Lazy data frame basics, 1D/2D histograms, and simple columnar I/O.
+Milestone: tptdyn analyze can process a 10GB CSV of collision events and generate histograms faster than PyROOT.
+Phase 2: Simulation Engine (Months 4-6)
+Implement tpt-dynamics-sim: Basic integrators (Velocity Verlet), Lennard-Jones potential.
+Implement neighbor lists and periodic boundary conditions.
+Milestone: tptdyn simulate can run a 10,000-atom Lennard-Jones fluid simulation stably.
+Phase 3: Scale & Acceleration (Months 7-9)
+Implement tpt-dynamics-compute: SIMD-accelerated force kernels.
+Implement PME (Particle Mesh Ewald) for long-range electrostatics.
+Implement domain decomposition for multi-core scaling.
+Milestone: tptdyn simulate scales linearly to 32+ CPU cores for a 1-million atom system.
+Phase 4: CLI, Python Bindings & Release (Months 10-12)
+Build tpt-dynamics-cli frontend.
+Implement tpt-dynamics-py (PyO3).
+Milestone: Release v0.1.0 on crates.io and PyPI. Publish benchmarks comparing tpt-dynamics to GROMACS and ROOT.
+9. Licensing
+tpt-dynamics is dual-licensed under MIT and Apache-2.0.
+Copyright: © 2026 TPT Solutions.
+Philosophy: By strictly enforcing permissive dependencies and avoiding GPL scientific code (like GROMACS or ROOT), we ensure that national labs, universities, and commercial quantum/physics startups can adopt this software under the MIT license without legal friction, while you retain full control as the solo maintainer.

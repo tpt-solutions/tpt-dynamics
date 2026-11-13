@@ -1,0 +1,41 @@
+# Rust
+/target/
+**/target/
+**/*.rs.bk
+# Library crates: commit Cargo.lock only for binaries/workspace root; keep it tracked
+# Cargo.lock
+
+# Python bindings
+__pycache__/
+*.py[cod]
+*.so
+*.pyd
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+
+# Editors / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Data & simulation output
+*.csv
+*.parquet
+*.root
+*.xtc
+*.trr
+*.tpr
+*.zarr/
+data/
+output/
+
+# Misc
+.env
+*.log
