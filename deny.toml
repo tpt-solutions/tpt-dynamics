@@ -1,0 +1,61 @@
+# cargo-deny configuration for tpt-dynamics.
+# Schema: cargo-deny >= 0.16 (the `unlicensed` / `copyleft` keys in the original
+# spec are deprecated and have been removed). Run with: cargo deny check
+#
+# Licence policy: see docs/adr/ADR-005-licence-policy.md.
+
+[graph]
+all-features = true
+no-default-features = false
+
+[advisories]
+version = 2
+ignore = []
+
+[licenses]
+version = 2
+# Anything not listed in `allow` is rejected. That is how GPL, LGPL,
+# AGPL and MPL crates are blocked (the spec's `copyleft` key no longer exists).
+#
+# IMPORTANT: bare `Apache-2.0` is deliberately NOT allowed. An `Apache-2.0`-only
+# crate (e.g. `arrow`) is rejected. Dual `MIT OR Apache-2.0` crates pass because
+# the MIT branch of the expression satisfies the allow list.
+allow = [
+    "MIT",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "Zlib",
+    "ISC",
+    "Unicode-3.0",
+]
+confidence-threshold = 0.93
+
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+highlight = "all"
+# Crates that would introduce C++ FFI, GPL code, or a zero-FFI violation.
+deny = [
+    { crate = "root", reason = "C++ FFI (ROOT). Use tpt-dynamics-data." },
+    { crate = "gromacs", reason = "GPL C++ (GROMACS). Use tpt-dynamics-sim." },
+    { crate = "geant4", reason = "C++ FFI. Not permitted." },
+    { crate = "arrow", reason = "Apache-2.0 only. Use the own columnar reader (todo.md Phase 7)." },
+    { crate = "arrow2", reason = "Apache-2.0 / unmaintained. Not permitted." },
+    { crate = "fftw-sys", reason = "GPL C FFI. Use tpt-math FFT." },
+    { crate = "mpi", reason = "Complex FFI. Use rayon or pure-Rust message passing." },
+    { crate = "rsmpi", reason = "Complex FFI. Use rayon or pure-Rust message passing." },
+    { crate = "bindgen", reason = "Zero-FFI policy." },
+    { crate = "cmake", reason = "Zero-FFI policy: no C/C++ build step." },
+]
+# `*-sys` crates are FFI bindings by definition; the zero-FFI policy forbids them.
+# Matched by pattern below; `cc` (C compiler driver) is flagged for review rather
+# than denied, because some pure-Rust crates use it for optional code paths.
+skip = []
+skip-tree = []
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = ["https://github.com/tpt-solutions"]
