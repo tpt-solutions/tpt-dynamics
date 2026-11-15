@@ -3,6 +3,8 @@
 
 use std::fs;
 
+use rayon::prelude::*;
+
 use tpt_dynamics_data::csv::CsvRecord;
 use tpt_dynamics_data::hist1d::Histogram1D;
 use tpt_dynamics_data::lazy::{col, Column, DType, DataFrame, Expr, LazyFrame};
@@ -71,8 +73,7 @@ pub(crate) fn run(args: &AnalyzeArgs, quiet: bool) -> Result<(), CliError> {
     let mut summary = Summary::default();
     let mut total_rows = 0usize;
     loop {
-        let records: Vec<CsvRecord> =
-            reader.by_ref().take(CHUNK_ROWS).collect::<Result<_, _>>().map_err(|e| csv_err(&e))?;
+        let records: Vec<CsvRecord> = reader.next_batch(CHUNK_ROWS).map_err(|e| csv_err(&e))?;
         if records.is_empty() {
             break;
         }
@@ -174,18 +175,23 @@ impl RunningStats {
 /// a column whose fields all parse as integers in this chunk becomes `i64`,
 /// otherwise `f64`.
 fn frame_from_records(names: &[String], records: &[CsvRecord]) -> Result<DataFrame, CliError> {
-    let mut columns = Vec::with_capacity(names.len());
-    for (i, name) in names.iter().enumerate() {
-        let ints: Result<Vec<i64>, _> = records.iter().map(|r| r.i64(i)).collect();
-        let column = if let Ok(v) = ints {
-            Column::I64(v)
-        } else {
-            let floats: Result<Vec<f64>, _> = records.iter().map(|r| r.f64(i)).collect();
-            let v = floats.map_err(|e| input(format!("column '{name}' is not numeric: {e}")))?;
-            Column::F64(v)
-        };
-        columns.push((name.clone(), column));
-    }
+    // Columns are independent, so they are converted in parallel.
+    let columns = names
+        .par_iter()
+        .enumerate()
+        .map(|(i, name)| {
+            let ints: Result<Vec<i64>, _> = records.iter().map(|r| r.i64(i)).collect();
+            let column = if let Ok(v) = ints {
+                Column::I64(v)
+            } else {
+                let floats: Result<Vec<f64>, _> = records.iter().map(|r| r.f64(i)).collect();
+                let v =
+                    floats.map_err(|e| input(format!("column '{name}' is not numeric: {e}")))?;
+                Column::F64(v)
+            };
+            Ok((name.clone(), column))
+        })
+        .collect::<Result<Vec<_>, CliError>>()?;
     DataFrame::with_rows(records.len(), columns)
         .map_err(|e| input(format!("cannot build table: {e}")))
 }

@@ -283,6 +283,62 @@ impl<R: BufRead> CsvReader<R> {
         self.line_no
     }
 
+    /// Reads up to `max_rows` records, splitting their fields on the rayon pool.
+    ///
+    /// Lines are read in order on the calling thread, and the records come back
+    /// in file order. The result is the same as collecting the iterator, with
+    /// the same field-count check. Returns an empty vector at end of input. An
+    /// error discards the records of this batch: the caller should stop.
+    ///
+    /// # Errors
+    ///
+    /// Returns the first read, UTF-8, quoting or field-count error in the batch.
+    pub fn next_batch(&mut self, max_rows: usize) -> Result<Vec<CsvRecord>, CsvError> {
+        use rayon::prelude::*;
+
+        if self.finished || max_rows == 0 {
+            return Ok(Vec::new());
+        }
+        let mut lines: Vec<(u64, String)> = Vec::with_capacity(max_rows.min(1 << 20));
+        while lines.len() < max_rows {
+            if !self.read_line()? {
+                self.finished = true;
+                break;
+            }
+            if self.buf.is_empty() {
+                continue;
+            }
+            let line = self.line_no;
+            // Move the bytes out rather than copying them; read_line clears the buffer.
+            let bytes = std::mem::take(&mut self.buf);
+            let text = String::from_utf8(bytes).map_err(|_| CsvError::InvalidUtf8 { line })?;
+            lines.push((line, text));
+        }
+        let delim = self.opts.delimiter;
+        let split: Vec<Result<CsvRecord, CsvError>> = lines
+            .into_par_iter()
+            .map(|(line, text)| Ok(CsvRecord { line, fields: split_fields(&text, delim, line)? }))
+            .collect();
+        let mut out = Vec::with_capacity(split.len());
+        for record in split {
+            let record = record?;
+            match self.expected_fields {
+                None => self.expected_fields = Some(record.fields.len()),
+                Some(expected) if expected != record.fields.len() => {
+                    self.finished = true;
+                    return Err(CsvError::FieldCount {
+                        line: record.line,
+                        expected,
+                        found: record.fields.len(),
+                    });
+                }
+                Some(_) => {}
+            }
+            out.push(record);
+        }
+        Ok(out)
+    }
+
     /// Read the next line into `self.buf`, without its terminator.
     /// Returns `false` at end of input.
     fn read_line(&mut self) -> Result<bool, CsvError> {
