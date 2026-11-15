@@ -1,0 +1,17 @@
+[package]
+name = "tpt-dynamics-data"
+description = "Data analysis for tpt-dynamics: physics histograms, lazy frames and columnar I/O (in progress)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+readme = "README.md"
+publish = true
+
+[dependencies]
+rayon = "1"
+
+[lints]
+workspace = true
