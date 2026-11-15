@@ -1,0 +1,32 @@
+name: Benchmark regression
+
+# Runs the data-crate timing probe and fails if any metric is more than 25%
+# slower than docs/benchmarks/baseline.json. See docs/benchmarks/README.md.
+# Timings on shared CI runners are noisy: treat a failure as a prompt to
+# re-run, and refresh the baseline only from a quiet, dedicated runner.
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  bench-regression:
+    name: timing probe vs baseline
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Run probe and compare with baseline
+        run: >
+          cargo run --release -p tpt-dynamics-data --example bench_json --
+          --out bench-current.json --check docs/benchmarks/baseline.json
+      - name: Upload current timings
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-current
+          path: bench-current.json

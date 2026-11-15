@@ -1,0 +1,113 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: "-D warnings"
+
+jobs:
+  fmt:
+    name: rustfmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - run: cargo fmt --all -- --check
+
+  clippy:
+    name: clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+
+  test:
+    name: test (${{ matrix.os }}, ${{ matrix.arch }})
+    runs-on: ${{ matrix.os }}
+    # Windows on arm64 is a newer hosted runner; its failures are reported but do
+    # not block merges until it has a track record (see docs/release-checklist.md).
+    continue-on-error: ${{ matrix.experimental }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            arch: x86_64
+            experimental: false
+          - os: ubuntu-24.04-arm
+            arch: aarch64
+            experimental: false
+          - os: windows-latest
+            arch: x86_64
+            experimental: false
+          - os: windows-11-arm
+            arch: aarch64
+            experimental: true
+          - os: macos-latest
+            arch: aarch64
+            experimental: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo test --workspace
+
+  doc:
+    name: rustdoc
+    runs-on: ubuntu-latest
+    env:
+      RUSTDOCFLAGS: "-D warnings"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo doc --workspace --no-deps
+
+  deny:
+    name: cargo-deny (licences, bans, sources)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check
+
+  zero-ffi:
+    name: no *-sys crates in the normal dependency tree
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Fail if any *-sys crate is a normal dependency
+        run: |
+          if cargo tree --workspace -e normal --prefix none --format '{p}' \
+              | awk '{print $1}' | sort -u | grep -E -- '-sys$'; then
+            echo "Found *-sys crate(s) in the dependency tree (zero-FFI policy)." >&2
+            exit 1
+          fi
+
+  no-std:
+    name: no_std build (thumbv7em-none-eabihf)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: thumbv7em-none-eabihf
+      - run: cargo build -p tpt-dynamics-core --no-default-features --target thumbv7em-none-eabihf
+
+  msrv:
+    name: MSRV (1.95)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.95
+      - run: cargo check --workspace --all-targets

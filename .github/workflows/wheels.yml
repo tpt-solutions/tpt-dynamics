@@ -1,0 +1,122 @@
+name: Python wheels
+
+# Builds abi3 wheels for the Python bindings (bindings/tpt-dynamics-py) and runs
+# the pytest suite against the built wheels. Build artifacts only: this workflow
+# never publishes to PyPI or any other index.
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "bindings/**"
+      - "tpt-dynamics-core/**"
+      - "tpt-dynamics-data/**"
+      - "tpt-dynamics-sim/**"
+      - ".github/workflows/wheels.yml"
+  pull_request:
+    paths:
+      - "bindings/**"
+      - "tpt-dynamics-core/**"
+      - "tpt-dynamics-data/**"
+      - "tpt-dynamics-sim/**"
+      - ".github/workflows/wheels.yml"
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: wheel (${{ matrix.rust_target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            rust_target: x86_64-unknown-linux-gnu
+          - os: ubuntu-latest
+            rust_target: aarch64-unknown-linux-gnu
+          - os: windows-latest
+            rust_target: x86_64-pc-windows-msvc
+          - os: windows-latest
+            rust_target: aarch64-pc-windows-msvc
+          - os: macos-latest
+            rust_target: x86_64-apple-darwin
+          - os: macos-latest
+            rust_target: aarch64-apple-darwin
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_target }}
+
+      - name: Build abi3 wheel
+        uses: PyO3/maturin-action@v1
+        with:
+          command: build
+          args: --release --out dist
+          target: ${{ matrix.rust_target }}
+          manylinux: auto
+          working-directory: bindings/tpt-dynamics-py
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.os }}-${{ matrix.rust_target }}
+          path: bindings/tpt-dynamics-py/dist/*.whl
+          if-no-files-found: error
+
+  sdist:
+    name: source distribution
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Build sdist
+        uses: PyO3/maturin-action@v1
+        with:
+          command: sdist
+          args: --out dist
+          working-directory: bindings/tpt-dynamics-py
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdist
+          path: bindings/tpt-dynamics-py/dist/*.tar.gz
+          if-no-files-found: error
+
+  test:
+    name: pytest (${{ matrix.os }}, Python ${{ matrix.python }})
+    needs: build
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python: ["3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: wheels-${{ matrix.os }}-*
+          path: dist
+          merge-multiple: true
+
+      # Only the wheel matching this runner's platform is installed; pip ignores
+      # the others. --no-index keeps the test on the locally built wheel.
+      - name: Install dependencies and the wheel built for this runner
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install numpy pytest
+          python -m pip install --no-index --find-links dist tpt-dynamics
+
+      - name: Run pytest against the installed wheel
+        run: python -m pytest bindings/tpt-dynamics-py/tests -q
