@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tutorial: Lennard-Jones fluid with the simulation crate - tpt-dynamics docs</title>
+<link rel="stylesheet" href="../style.css">
+</head>
+<body>
+<header><a href="../index.html">tpt-dynamics documentation index</a></header>
+<div class="layout">
+<nav aria-label="Documentation">
+<ul><li><a href="../index.html">Index</a></li></ul>
+<h2>Tutorials</h2><ul><li><a href="hep-analysis.html">Tutorial: dilepton mass analysis with the data crate</a></li><li><a href="lj-fluid.html">Tutorial: Lennard-Jones fluid with the simulation crate</a></li></ul><h2>Architecture decision records</h2><ul><li><a href="../adr/ADR-001-pure-rust-md.html">ADR-001: Pure-Rust molecular dynamics over FFI to GROMACS</a></li><li><a href="../adr/ADR-002-lazy-data-frames.html">ADR-002: Lazy data frames for HEP analysis</a></li><li><a href="../adr/ADR-003-simd-nbody-kernels.html">ADR-003: SIMD-accelerated N-body kernels</a></li><li><a href="../adr/ADR-004-addendum-strata-gap-analysis.html">ADR-004 addendum: tpt-strata gap analysis</a></li><li><a href="../adr/ADR-004-data-engine-on-tpt-strata.html">ADR-004: Build the data engine on tpt-strata (no polars or arrow)</a></li><li><a href="../adr/ADR-005-licence-policy.html">ADR-005: Licence policy (no Apache-2.0-only dependencies)</a></li><li><a href="../adr/ADR-006-unsafe-code-policy.html">ADR-006: Unsafe-code policy</a></li><li><a href="../adr/ADR-007-pyo3-unsafe-exception.html">ADR-007: Unsafe-code exception for the Python bindings (tpt-dynamics-py)</a></li></ul><h2>Benchmarks</h2><ul><li><a href="../benchmarks/compute-kernels.html">tpt-dynamics-compute kernel benchmarks</a></li><li><a href="../benchmarks/README.html">Performance regression tracking</a></li></ul><h2>Migration guides</h2><ul><li><a href="../migration/pyroot.html">Migrating from PyROOT to tptdynamics</a></li></ul><h2>Audit reports</h2><ul><li><a href="../audit/licence-review.html">Full-tree licence review</a></li><li><a href="../audit/security-review.html">Security review: parser attack surface and resource limits</a></li><li><a href="../audit/unsafe-audit.html">Unsafe-code audit</a></li></ul><h2>Project documentation</h2><ul><li><a href="../dependencies.html">Dependency audit</a></li><li><a href="../fuzzing.html">Fuzzing</a></li><li><a href="../release-checklist.html">Release checklist</a></li></ul>
+</nav>
+<main>
+<h1 id="tutorial-lennard-jones-fluid-with-the-simulation-crate">Tutorial: Lennard-Jones fluid with the simulation crate</h1>
+<p>This tutorial explains the <code>lj_fluid</code> example in <a href="https://github.com/tpt-solutions/tpt-dynamics/blob/master/tpt-dynamics-sim/examples/lj_fluid.rs"><code>tpt-dynamics-sim/examples/lj_fluid.rs</code></a>. It builds a 10,000-atom face-centred cubic (FCC) crystal in reduced units, equilibrates it with a thermostat, then checks energy conservation in a microcanonical (NVE) run. This is the Phase 2 milestone check.</p>
+<p>Run it in release mode. Debug builds are much slower:</p>
+<pre><code class="language-text">cargo run --release -p tpt-dynamics-sim --example lj_fluid</code></pre>
+<h2 id="1-build-the-system">1. Build the system</h2>
+<p><code>build_fcc()</code> places four atoms per conventional cell on an FCC basis. The box is rectangular, <code>10 x 10 x 25</code> cells, so the atom count is exactly <code>4 * 10 * 10 * 25 = 10,000</code>. The lattice constant comes from the reduced density <code>rho* = 0.8442</code>:</p>
+<pre><code class="language-rust">let a = (4.0 / DENSITY).cbrt();
+let lengths = [CELLS[0] as f64 * a, CELLS[1] as f64 * a, CELLS[2] as f64 * a];
+let mut sys = System::new(SimBox::new(lengths[0], lengths[1], lengths[2]).expect(&quot;valid box&quot;));</code></pre>
+<p>Each atom is added with <code>push_atom(NewAtom { .. })</code>. In reduced units the mass is 1 and the charge is 0. Velocities start at zero and are set in the next step.</p>
+<h2 id="2-initial-velocities">2. Initial velocities</h2>
+<pre><code class="language-rust">maxwell_boltzmann_velocities(&amp;mut system, TEMPERATURE, 12345, UnitSystem::Reduced);</code></pre>
+<p>The seed (<code>12345</code>) makes the run reproducible. The target temperature is <code>T* = 0.72</code>.</p>
+<h2 id="3-force-field-neighbour-list-and-thermostat">3. Force field, neighbour list and thermostat</h2>
+<pre><code class="language-rust">let ff = LennardJones::single_type(1.0, 1.0, CUTOFF, Modifier::Shift).expect(&quot;valid LJ&quot;);
+let eval = ForceEvaluator::new(Box::new(ff), SKIN).expect(&quot;valid neighbour list&quot;);
+let thermostat = Berendsen::new(TEMPERATURE, 0.5, UnitSystem::Reduced).expect(&quot;valid thermostat&quot;);</code></pre>
+<ul><li><code>Modifier::Shift</code> shifts the potential so it is zero at the cutoff <code>r_c = 2.5 sigma</code>, which removes the energy discontinuity there. <code>Modifier::None</code> gives plain truncation, and <code>Modifier::Switch</code> gives a smooth switch.</li><li><code>ForceEvaluator</code> owns the neighbour list. <code>SKIN = 0.3</code> is the Verlet skin, so the list is rebuilt only after atoms have moved far enough to matter.</li><li><code>Berendsen</code> couples the system to a heat bath with relaxation time <code>0.5</code>.</li></ul>
+<p>The force field, integrator and thermostat are passed as trait objects (<code>Box&lt;dyn ...&gt;</code>), so they can be swapped at run time (see ADR-001).</p>
+<h2 id="4-equilibrate-then-run-nve">4. Equilibrate, then run NVE</h2>
+<pre><code class="language-rust">let mut sim = Simulation::new(
+    system,
+    eval,
+    Box::new(VelocityVerlet),
+    Some(Box::new(thermostat)),
+    DT,
+    UnitSystem::Reduced,
+)
+.expect(&quot;simulation setup&quot;);
+let equil = sim.run(300, &amp;mut []).expect(&quot;equilibration&quot;); // thermostat on
+sim.thermostat = None;
+let nve = sim.run(300, &amp;mut []).expect(&quot;NVE run&quot;);          // microcanonical</code></pre>
+<p><code>sim.run</code> returns a summary with the <code>initial</code> and <code>last</code> states, the wall time, <code>relative_energy_drift()</code> and the number of neighbour-list rebuilds. In a correct NVE run the drift stays small. The example uses <code>DT = 0.004</code>.</p>
+<h2 id="5-what-the-example-checks">5. What the example checks</h2>
+<p>The example asserts that the final energies and all positions are finite. It then prints:</p>
+<ul><li>the mean temperature and potential energy per atom after equilibration;</li><li>the NVE relative energy drift, which should be small;</li><li>the total momentum, which should stay near zero;</li><li>milliseconds per step, the number to compare when tuning performance.</li></ul>
+<h2 id="changing-the-run">Changing the run</h2>
+<ul><li>Density and temperature are the constants <code>DENSITY</code> and <code>TEMPERATURE</code>. Keep <code>rho* = 0.8442</code> and <code>T* = 0.72</code> to reproduce the liquid state used in validation.</li><li><code>CELLS</code> sets the system size. <code>[4, 4, 4]</code> gives 256 atoms, which runs in seconds and is useful for experiments.</li><li>Setting the modifier to <code>Modifier::None</code> shows the energy error that an unshifted cutoff introduces.</li></ul>
+<h2 id="current-limits">Current limits</h2>
+<ul><li>The example uses velocity Verlet. The crate also has <code>LeapFrog</code>, which the example does not use.</li><li>The only thermostat is Berendsen. Nose-Hoover and v-rescale are Phase 5 items.</li><li>The example is single-threaded. Parallel neighbour-list builds and domain decomposition are later phases.</li><li><code>TrajectoryWriter</code> and <code>EnergyLogger</code> exist in <code>tpt_dynamics_sim::output</code>. The example does not attach them.</li></ul>
+<footer>Source: <a href="https://github.com/tpt-solutions/tpt-dynamics/blob/master/docs/tutorials/lj-fluid.md">docs/tutorials/lj-fluid.md</a> (rendered by docs/site/build.py)</footer>
+</main>
+</div>
+</body>
+</html>

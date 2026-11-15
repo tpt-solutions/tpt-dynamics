@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Performance regression tracking - tpt-dynamics docs</title>
+<link rel="stylesheet" href="../style.css">
+</head>
+<body>
+<header><a href="../index.html">tpt-dynamics documentation index</a></header>
+<div class="layout">
+<nav aria-label="Documentation">
+<ul><li><a href="../index.html">Index</a></li></ul>
+<h2>Tutorials</h2><ul><li><a href="../tutorials/hep-analysis.html">Tutorial: dilepton mass analysis with the data crate</a></li><li><a href="../tutorials/lj-fluid.html">Tutorial: Lennard-Jones fluid with the simulation crate</a></li></ul><h2>Architecture decision records</h2><ul><li><a href="../adr/ADR-001-pure-rust-md.html">ADR-001: Pure-Rust molecular dynamics over FFI to GROMACS</a></li><li><a href="../adr/ADR-002-lazy-data-frames.html">ADR-002: Lazy data frames for HEP analysis</a></li><li><a href="../adr/ADR-003-simd-nbody-kernels.html">ADR-003: SIMD-accelerated N-body kernels</a></li><li><a href="../adr/ADR-004-addendum-strata-gap-analysis.html">ADR-004 addendum: tpt-strata gap analysis</a></li><li><a href="../adr/ADR-004-data-engine-on-tpt-strata.html">ADR-004: Build the data engine on tpt-strata (no polars or arrow)</a></li><li><a href="../adr/ADR-005-licence-policy.html">ADR-005: Licence policy (no Apache-2.0-only dependencies)</a></li><li><a href="../adr/ADR-006-unsafe-code-policy.html">ADR-006: Unsafe-code policy</a></li><li><a href="../adr/ADR-007-pyo3-unsafe-exception.html">ADR-007: Unsafe-code exception for the Python bindings (tpt-dynamics-py)</a></li></ul><h2>Benchmarks</h2><ul><li><a href="compute-kernels.html">tpt-dynamics-compute kernel benchmarks</a></li><li><a href="README.html">Performance regression tracking</a></li></ul><h2>Migration guides</h2><ul><li><a href="../migration/pyroot.html">Migrating from PyROOT to tptdynamics</a></li></ul><h2>Audit reports</h2><ul><li><a href="../audit/licence-review.html">Full-tree licence review</a></li><li><a href="../audit/security-review.html">Security review: parser attack surface and resource limits</a></li><li><a href="../audit/unsafe-audit.html">Unsafe-code audit</a></li></ul><h2>Project documentation</h2><ul><li><a href="../dependencies.html">Dependency audit</a></li><li><a href="../fuzzing.html">Fuzzing</a></li><li><a href="../release-checklist.html">Release checklist</a></li></ul>
+</nav>
+<main>
+<h1 id="performance-regression-tracking">Performance regression tracking</h1>
+<p>CI job: <code>.github/workflows/bench.yml</code>.</p>
+<ul><li>The probe is <code>tpt-dynamics-data/examples/bench_json.rs</code>. It times four hot paths (histogram fill, histogram serialise round trip, CSV parse, jagged sums). Each is the median of five runs.</li><li><code>docs/benchmarks/baseline.json</code> holds the reference timings in nanoseconds.</li><li>A metric fails when it is more than 25% slower than the baseline. Faster results always pass.</li></ul>
+<h2 id="running-locally">Running locally</h2>
+<pre><code class="language-text">cargo run --release -p tpt-dynamics-data --example bench_json -- --check docs/benchmarks/baseline.json
+cargo run --release -p tpt-dynamics-data --example bench_json -- --out docs/benchmarks/baseline.json   # refresh</code></pre>
+<h2 id="caveats">Caveats</h2>
+<ul><li>The baseline was recorded on one Windows development machine. It is not comparable to GitHub-hosted runners. Before relying on the CI gate, record a baseline from the CI runner (download the <code>bench-current</code> artifact from a green run and commit it as <code>baseline.json</code>).</li><li>The histogram-fill metric varied by about 35% between two local runs. The 25% threshold can therefore flag noise. If this happens, re-run first.</li><li>Only the data crate is covered. Kernel micro-benchmarks in <code>tpt-dynamics-compute</code> are tracked separately (<code>docs/benchmarks/compute-kernels.md</code>).</li></ul>
+<footer>Source: <a href="https://github.com/tpt-solutions/tpt-dynamics/blob/master/docs/benchmarks/README.md">docs/benchmarks/README.md</a> (rendered by docs/site/build.py)</footer>
+</main>
+</div>
+</body>
+</html>

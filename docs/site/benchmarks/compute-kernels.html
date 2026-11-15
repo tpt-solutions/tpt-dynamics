@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>tpt-dynamics-compute kernel benchmarks - tpt-dynamics docs</title>
+<link rel="stylesheet" href="../style.css">
+</head>
+<body>
+<header><a href="../index.html">tpt-dynamics documentation index</a></header>
+<div class="layout">
+<nav aria-label="Documentation">
+<ul><li><a href="../index.html">Index</a></li></ul>
+<h2>Tutorials</h2><ul><li><a href="../tutorials/hep-analysis.html">Tutorial: dilepton mass analysis with the data crate</a></li><li><a href="../tutorials/lj-fluid.html">Tutorial: Lennard-Jones fluid with the simulation crate</a></li></ul><h2>Architecture decision records</h2><ul><li><a href="../adr/ADR-001-pure-rust-md.html">ADR-001: Pure-Rust molecular dynamics over FFI to GROMACS</a></li><li><a href="../adr/ADR-002-lazy-data-frames.html">ADR-002: Lazy data frames for HEP analysis</a></li><li><a href="../adr/ADR-003-simd-nbody-kernels.html">ADR-003: SIMD-accelerated N-body kernels</a></li><li><a href="../adr/ADR-004-addendum-strata-gap-analysis.html">ADR-004 addendum: tpt-strata gap analysis</a></li><li><a href="../adr/ADR-004-data-engine-on-tpt-strata.html">ADR-004: Build the data engine on tpt-strata (no polars or arrow)</a></li><li><a href="../adr/ADR-005-licence-policy.html">ADR-005: Licence policy (no Apache-2.0-only dependencies)</a></li><li><a href="../adr/ADR-006-unsafe-code-policy.html">ADR-006: Unsafe-code policy</a></li><li><a href="../adr/ADR-007-pyo3-unsafe-exception.html">ADR-007: Unsafe-code exception for the Python bindings (tpt-dynamics-py)</a></li></ul><h2>Benchmarks</h2><ul><li><a href="compute-kernels.html">tpt-dynamics-compute kernel benchmarks</a></li><li><a href="README.html">Performance regression tracking</a></li></ul><h2>Migration guides</h2><ul><li><a href="../migration/pyroot.html">Migrating from PyROOT to tptdynamics</a></li></ul><h2>Audit reports</h2><ul><li><a href="../audit/licence-review.html">Full-tree licence review</a></li><li><a href="../audit/security-review.html">Security review: parser attack surface and resource limits</a></li><li><a href="../audit/unsafe-audit.html">Unsafe-code audit</a></li></ul><h2>Project documentation</h2><ul><li><a href="../dependencies.html">Dependency audit</a></li><li><a href="../fuzzing.html">Fuzzing</a></li><li><a href="../release-checklist.html">Release checklist</a></li></ul>
+</nav>
+<main>
+<h1 id="tpt-dynamics-compute-kernel-benchmarks">tpt-dynamics-compute kernel benchmarks</h1>
+<p>Recorded 2026-11-16 with <code>cargo run --release -p tpt-dynamics-compute --example kernel_bench</code>.</p>
+<p><strong>Machine:</strong> Intel Core i7-12700 (12 cores, 20 logical), Windows 11, rayon pool of 20 threads. Rust 1.100.0 stable, release profile (<code>lto = &quot;thin&quot;</code>, <code>codegen-units = 1</code>). Target features are the default x86_64 baseline (no <code>-C target-cpu=native</code>), so the tpt-simd lane code uses 128-bit SSE2 registers.</p>
+<p>Timings are the minimum and median of 9 runs after one warm-up. Numbers are from a single machine and are indicative only.</p>
+<div class="table-wrap"><table><thead><tr><th>Kernel</th><th>System</th><th>Min</th><th>Median</th><th>Notes</th></tr></thead><tbody><tr><td>Pair list, scalar reference</td><td>N=4096, rho=0.8, rc=2.5, 106,734 pairs</td><td>4.60 ms</td><td>4.62 ms</td><td>LJ + Ewald real-space Coulomb</td></tr><tr><td>Pair list, tpt-simd (4 lanes)</td><td>same</td><td>4.15 ms</td><td>4.28 ms</td><td>about 8% faster than scalar</td></tr><tr><td>Cluster pairs, atoms in input order</td><td>same, 524,798 cluster pairs</td><td>142.7 ms</td><td>144.8 ms</td><td>bounding spheres do not filter: clusters are spatially random</td></tr><tr><td>Cluster pairs, spatially sorted</td><td>same, 111,097 cluster pairs</td><td>23.8 ms</td><td>24.3 ms</td><td>atoms sorted by rc-sized cells before clustering</td></tr><tr><td>PME reciprocal</td><td>N=512, 8^3 box, grid 64^3, order 4</td><td>22.1 ms</td><td>23.8 ms</td><td>spread, FFT, solve and gather, 20 threads</td></tr></tbody></table></div>
+<h2 id="interpretation">Interpretation</h2>
+<ul><li>The 4-lane kernel gains little because <code>erfc</code> and <code>exp</code> are evaluated per lane with <code>libm</code> (no vector <code>erfc</code> in tpt-simd). The arithmetic is vectorised; the transcendental calls dominate. A vector erfc would be the next step.</li><li>The cluster kernel is slower than the pair-list kernel. Each cluster pair evaluates a 4x4 block, so most lanes are outside the cutoff, and the cluster list in this benchmark holds about 10x more atom-pair work than the pair list. Atom ordering is decisive: sorting cuts the cluster list from 524,798 to 111,097 pairs and the time by about 6x. The list build is brute force (O(clusters^2)) and is not timed here; the simulation crate should provide the spatial sort and cell-based list build.</li><li>PME spreading uses one private grid per thread and then sums them. An earlier version allocated a grid per rayon split and took about 640 ms for the same case.</li></ul>
+<footer>Source: <a href="https://github.com/tpt-solutions/tpt-dynamics/blob/master/docs/benchmarks/compute-kernels.md">docs/benchmarks/compute-kernels.md</a> (rendered by docs/site/build.py)</footer>
+</main>
+</div>
+</body>
+</html>

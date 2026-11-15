@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ADR-005: Licence policy (no Apache-2.0-only dependencies) - tpt-dynamics docs</title>
+<link rel="stylesheet" href="../style.css">
+</head>
+<body>
+<header><a href="../index.html">tpt-dynamics documentation index</a></header>
+<div class="layout">
+<nav aria-label="Documentation">
+<ul><li><a href="../index.html">Index</a></li></ul>
+<h2>Tutorials</h2><ul><li><a href="../tutorials/hep-analysis.html">Tutorial: dilepton mass analysis with the data crate</a></li><li><a href="../tutorials/lj-fluid.html">Tutorial: Lennard-Jones fluid with the simulation crate</a></li></ul><h2>Architecture decision records</h2><ul><li><a href="ADR-001-pure-rust-md.html">ADR-001: Pure-Rust molecular dynamics over FFI to GROMACS</a></li><li><a href="ADR-002-lazy-data-frames.html">ADR-002: Lazy data frames for HEP analysis</a></li><li><a href="ADR-003-simd-nbody-kernels.html">ADR-003: SIMD-accelerated N-body kernels</a></li><li><a href="ADR-004-addendum-strata-gap-analysis.html">ADR-004 addendum: tpt-strata gap analysis</a></li><li><a href="ADR-004-data-engine-on-tpt-strata.html">ADR-004: Build the data engine on tpt-strata (no polars or arrow)</a></li><li><a href="ADR-005-licence-policy.html">ADR-005: Licence policy (no Apache-2.0-only dependencies)</a></li><li><a href="ADR-006-unsafe-code-policy.html">ADR-006: Unsafe-code policy</a></li><li><a href="ADR-007-pyo3-unsafe-exception.html">ADR-007: Unsafe-code exception for the Python bindings (tpt-dynamics-py)</a></li></ul><h2>Benchmarks</h2><ul><li><a href="../benchmarks/compute-kernels.html">tpt-dynamics-compute kernel benchmarks</a></li><li><a href="../benchmarks/README.html">Performance regression tracking</a></li></ul><h2>Migration guides</h2><ul><li><a href="../migration/pyroot.html">Migrating from PyROOT to tptdynamics</a></li></ul><h2>Audit reports</h2><ul><li><a href="../audit/licence-review.html">Full-tree licence review</a></li><li><a href="../audit/security-review.html">Security review: parser attack surface and resource limits</a></li><li><a href="../audit/unsafe-audit.html">Unsafe-code audit</a></li></ul><h2>Project documentation</h2><ul><li><a href="../dependencies.html">Dependency audit</a></li><li><a href="../fuzzing.html">Fuzzing</a></li><li><a href="../release-checklist.html">Release checklist</a></li></ul>
+</nav>
+<main>
+<h1 id="adr-005-licence-policy-no-apache-20-only-dependencies">ADR-005: Licence policy (no Apache-2.0-only dependencies)</h1>
+<ul><li><strong>Status:</strong> Accepted</li><li><strong>Date:</strong> 2026-11-16</li></ul>
+<h2 id="context">Context</h2>
+<p>The spec&#x27;s <code>deny.toml</code> allows plain <code>Apache-2.0</code>. That would admit Apache-2.0-only crates such as <code>arrow</code> and <code>parquet</code>, which the project&#x27;s MIT-first policy bans. The spec also uses the <code>unlicensed</code> and <code>copyleft</code> keys, which cargo-deny has removed.</p>
+<h2 id="decision">Decision</h2>
+<ul><li>Allow <code>MIT</code>, <code>BSD-2-Clause</code>, <code>BSD-3-Clause</code>, <code>Zlib</code>, <code>ISC</code> and <code>Unicode-3.0</code>.</li><li>Do <strong>not</strong> allow bare <code>Apache-2.0</code>. A dual <code>MIT OR Apache-2.0</code> crate passes through its MIT branch. An Apache-2.0-only crate is rejected.</li><li>Reject the copyleft family by not allowing it (no explicit list is required).</li><li>Ban by name the crates listed in <code>deny.toml</code>, including <code>arrow</code> and <code>parquet</code>.</li></ul>
+<p>This is the deviation from the spec. It was tested: a scratch copy that depends on <code>arrow</code> fails <code>cargo deny check</code> with <code>arrow</code> reported as banned and the licence rejected.</p>
+<h2 id="consequences">Consequences</h2>
+<ul><li><code>tpt-strata-parquet</code> cannot be used (see ADR-004).</li><li>The <code>*-sys</code> ban cannot be expressed as a glob in cargo-deny. A CI job (<code>zero-ffi</code>) fails if any <code>*-sys</code> crate is in the normal dependency tree.</li></ul>
+<h2 id="amendment-2026-11-16-apache-20-with-llvm-exception">Amendment (2026-11-16): <code>Apache-2.0 WITH LLVM-exception</code></h2>
+<p><code>target-lexicon</code> (a build dependency of PyO3&#x27;s build configuration) is licensed <code>Apache-2.0 WITH LLVM-exception</code>. The LLVM exception permits linking and redistribution without the Apache-2.0 restrictions that matter here, so this exact SPDX expression is added to the allow list by name. Bare <code>Apache-2.0</code> remains not allowed, and any other <code>WITH</code> exception needs a new amendment.</p>
+<footer>Source: <a href="https://github.com/tpt-solutions/tpt-dynamics/blob/master/docs/adr/ADR-005-licence-policy.md">docs/adr/ADR-005-licence-policy.md</a> (rendered by docs/site/build.py)</footer>
+</main>
+</div>
+</body>
+</html>

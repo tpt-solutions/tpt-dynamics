@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fuzzing - tpt-dynamics docs</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header><a href="index.html">tpt-dynamics documentation index</a></header>
+<div class="layout">
+<nav aria-label="Documentation">
+<ul><li><a href="index.html">Index</a></li></ul>
+<h2>Tutorials</h2><ul><li><a href="tutorials/hep-analysis.html">Tutorial: dilepton mass analysis with the data crate</a></li><li><a href="tutorials/lj-fluid.html">Tutorial: Lennard-Jones fluid with the simulation crate</a></li></ul><h2>Architecture decision records</h2><ul><li><a href="adr/ADR-001-pure-rust-md.html">ADR-001: Pure-Rust molecular dynamics over FFI to GROMACS</a></li><li><a href="adr/ADR-002-lazy-data-frames.html">ADR-002: Lazy data frames for HEP analysis</a></li><li><a href="adr/ADR-003-simd-nbody-kernels.html">ADR-003: SIMD-accelerated N-body kernels</a></li><li><a href="adr/ADR-004-addendum-strata-gap-analysis.html">ADR-004 addendum: tpt-strata gap analysis</a></li><li><a href="adr/ADR-004-data-engine-on-tpt-strata.html">ADR-004: Build the data engine on tpt-strata (no polars or arrow)</a></li><li><a href="adr/ADR-005-licence-policy.html">ADR-005: Licence policy (no Apache-2.0-only dependencies)</a></li><li><a href="adr/ADR-006-unsafe-code-policy.html">ADR-006: Unsafe-code policy</a></li><li><a href="adr/ADR-007-pyo3-unsafe-exception.html">ADR-007: Unsafe-code exception for the Python bindings (tpt-dynamics-py)</a></li></ul><h2>Benchmarks</h2><ul><li><a href="benchmarks/compute-kernels.html">tpt-dynamics-compute kernel benchmarks</a></li><li><a href="benchmarks/README.html">Performance regression tracking</a></li></ul><h2>Migration guides</h2><ul><li><a href="migration/pyroot.html">Migrating from PyROOT to tptdynamics</a></li></ul><h2>Audit reports</h2><ul><li><a href="audit/licence-review.html">Full-tree licence review</a></li><li><a href="audit/security-review.html">Security review: parser attack surface and resource limits</a></li><li><a href="audit/unsafe-audit.html">Unsafe-code audit</a></li></ul><h2>Project documentation</h2><ul><li><a href="dependencies.html">Dependency audit</a></li><li><a href="fuzzing.html">Fuzzing</a></li><li><a href="release-checklist.html">Release checklist</a></li></ul>
+</nav>
+<main>
+<h1 id="fuzzing">Fuzzing</h1>
+<p>Two layers exist. Both target the untrusted-input readers in <code>tpt-dynamics-data</code> (CSV, columnar, serialise/JSON, Arrow-IPC-style). Parsers in <code>tpt-dynamics-sim</code> (PDB, GRO, TOML) are not yet covered and are listed in <code>docs/audit/security-review.md</code>.</p>
+<h2 id="1-stable-toolchain-randomised-tests-run-in-ci">1. Stable-toolchain randomised tests (run in CI)</h2>
+<p><code>tpt-dynamics-data/tests/fuzz_parsers.rs</code> runs with <code>cargo test</code>. It uses the deterministic <code>SplitMix64</code> generator, so every failure reproduces.</p>
+<p>Each reader gets four kinds of input:</p>
+<ol><li>random bytes;</li><li>random text from a parser-relevant alphabet;</li><li>every truncation of a valid input;</li><li>random mutations of a valid input (bit flips, overwrites, insertions, deletions, and large values written over 4-byte windows to hit length fields).</li></ol>
+<p>The contract is that every input either parses or returns <code>Err</code>. No input may panic, hang, or allocate in proportion to an unchecked length.</p>
+<p>Iteration count defaults to 10,000 per generator. Override it with <code>FUZZ_ITERS</code>:</p>
+<pre><code class="language-text">cargo test -p tpt-dynamics-data --test fuzz_parsers
+FUZZ_ITERS=200000 cargo test -p tpt-dynamics-data --release --test fuzz_parsers</code></pre>
+<h2 id="2-cargo-fuzz-longer-campaigns-nightly">2. cargo-fuzz (longer campaigns, nightly)</h2>
+<p><code>cargo-fuzz</code> uses libFuzzer and needs a nightly toolchain. It is not part of the workspace, and it is not run in CI. Use it for long campaigns on a dedicated machine.</p>
+<p>Setup (one time, on a machine with nightly):</p>
+<pre><code class="language-text">rustup toolchain install nightly
+cargo install cargo-fuzz
+cd tpt-dynamics-data
+cargo +nightly fuzz init</code></pre>
+<p>Then add one target per reader under <code>tpt-dynamics-data/fuzz/fuzz_targets/</code>. Each target is a few lines that call the public API on the input bytes and ignore the result:</p>
+<pre><code class="language-rust">#![no_main]
+use libfuzzer_sys::fuzz_target;
+
+fuzz_target!(|data: &amp;[u8]| {
+    let _ = tpt_dynamics_data::serialise::Histogram1D::from_bytes(data);
+});</code></pre>
+<p>Suggested targets: <code>csv</code> (drive <code>CsvReader</code> over <code>data</code>), <code>columnar</code> (<code>columnar::read_table</code>), <code>serialise_hist1d</code> (<code>Histogram1D::from_bytes</code>), <code>serialise_json</code> (<code>Histogram1D::from_json</code> on <code>str::from_utf8(data)</code>), and <code>arrow_ipc</code> (<code>arrow_ipc::read_all</code>).</p>
+<p>Run one target:</p>
+<pre><code class="language-text">cargo +nightly fuzz run arrow_ipc -- -max_total_time=3600</code></pre>
+<p>Crashes are saved under <code>fuzz/artifacts/&lt;target&gt;/</code>. Reproduce with <code>cargo +nightly fuzz run &lt;target&gt; &lt;artifact-file&gt;</code>, fix the bug, and add the artifact as a regression case in <code>fuzz_parsers.rs</code> or as a unit test.</p>
+<p><code>fuzz/</code> is a separate package with its own <code>Cargo.toml</code>. Its dependencies (<code>libfuzzer-sys</code>, MIT OR Apache-2.0) must pass <code>cargo deny check</code> before the directory is committed. Do not add it to the workspace <code>members</code> list.</p>
+<h2 id="3-sanitizers-optional">3. Sanitizers (optional)</h2>
+<p>Nightly <code>-Zsanitizer=address</code> catches out-of-bounds reads in any code that uses <code>unsafe</code>. The workspace currently has none in hand-written code (see <code>docs/audit/unsafe-audit.md</code>), so sanitizers mainly add value for dependencies.</p>
+<footer>Source: <a href="https://github.com/tpt-solutions/tpt-dynamics/blob/master/docs/fuzzing.md">docs/fuzzing.md</a> (rendered by docs/site/build.py)</footer>
+</main>
+</div>
+</body>
+</html>

@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Migrating from PyROOT to tptdynamics - tpt-dynamics docs</title>
+<link rel="stylesheet" href="../style.css">
+</head>
+<body>
+<header><a href="../index.html">tpt-dynamics documentation index</a></header>
+<div class="layout">
+<nav aria-label="Documentation">
+<ul><li><a href="../index.html">Index</a></li></ul>
+<h2>Tutorials</h2><ul><li><a href="../tutorials/hep-analysis.html">Tutorial: dilepton mass analysis with the data crate</a></li><li><a href="../tutorials/lj-fluid.html">Tutorial: Lennard-Jones fluid with the simulation crate</a></li></ul><h2>Architecture decision records</h2><ul><li><a href="../adr/ADR-001-pure-rust-md.html">ADR-001: Pure-Rust molecular dynamics over FFI to GROMACS</a></li><li><a href="../adr/ADR-002-lazy-data-frames.html">ADR-002: Lazy data frames for HEP analysis</a></li><li><a href="../adr/ADR-003-simd-nbody-kernels.html">ADR-003: SIMD-accelerated N-body kernels</a></li><li><a href="../adr/ADR-004-addendum-strata-gap-analysis.html">ADR-004 addendum: tpt-strata gap analysis</a></li><li><a href="../adr/ADR-004-data-engine-on-tpt-strata.html">ADR-004: Build the data engine on tpt-strata (no polars or arrow)</a></li><li><a href="../adr/ADR-005-licence-policy.html">ADR-005: Licence policy (no Apache-2.0-only dependencies)</a></li><li><a href="../adr/ADR-006-unsafe-code-policy.html">ADR-006: Unsafe-code policy</a></li><li><a href="../adr/ADR-007-pyo3-unsafe-exception.html">ADR-007: Unsafe-code exception for the Python bindings (tpt-dynamics-py)</a></li></ul><h2>Benchmarks</h2><ul><li><a href="../benchmarks/compute-kernels.html">tpt-dynamics-compute kernel benchmarks</a></li><li><a href="../benchmarks/README.html">Performance regression tracking</a></li></ul><h2>Migration guides</h2><ul><li><a href="pyroot.html">Migrating from PyROOT to tptdynamics</a></li></ul><h2>Audit reports</h2><ul><li><a href="../audit/licence-review.html">Full-tree licence review</a></li><li><a href="../audit/security-review.html">Security review: parser attack surface and resource limits</a></li><li><a href="../audit/unsafe-audit.html">Unsafe-code audit</a></li></ul><h2>Project documentation</h2><ul><li><a href="../dependencies.html">Dependency audit</a></li><li><a href="../fuzzing.html">Fuzzing</a></li><li><a href="../release-checklist.html">Release checklist</a></li></ul>
+</nav>
+<main>
+<h1 id="migrating-from-pyroot-to-tptdynamics">Migrating from PyROOT to <code>tpt_dynamics</code></h1>
+<p>This page maps common PyROOT idioms to their <code>tpt_dynamics</code> equivalents. The examples are the kind of analysis code that is typical of ROOT-based HEP work. Every <code>tpt_dynamics</code> call shown here is covered by the test suite in <code>bindings/tpt-dynamics-py/tests/test_basic.py</code>.</p>
+<h2 id="quick-reference">Quick reference</h2>
+<div class="table-wrap"><table><thead><tr><th>PyROOT</th><th>tpt_dynamics</th><th>Notes</th></tr></thead><tbody><tr><td><code>TH1F(&quot;h&quot;, &quot;title&quot;, 50, 0, 200)</code></td><td><code>td.Histogram1D(50, 0.0, 200.0)</code></td><td>Bins are <code>[lo, hi)</code>. Titles and names are not stored.</td></tr><tr><td><code>TH1F(..., nbins, array_of_edges)</code></td><td><code>td.Histogram1D.variable(edges)</code></td><td><code>edges</code> is a sequence of strictly increasing floats.</td></tr><tr><td><code>h.Fill(x)</code></td><td><code>h.fill(x_array)</code></td><td>Takes a whole numpy array at once, which avoids a Python loop per entry.</td></tr><tr><td><code>h.Fill(x, w)</code></td><td><code>h.fill(x_array, weights=w_array)</code></td><td></td></tr><tr><td><code>h.GetBinContent(i)</code></td><td><code>h.bin(i)</code></td><td>Bin index <code>i</code> is zero-based, as in numpy.</td></tr><tr><td><code>h.GetBinError(i)</code></td><td><code>h.bin_error(i)</code></td><td><code>sqrt(sum of w^2)</code>, the same convention as ROOT.</td></tr><tr><td><code>h.GetBinCenter(i)</code></td><td><code>h.bin_centers()[i]</code></td><td>Returns the whole array.</td></tr><tr><td><code>h.GetNbinsX()</code></td><td><code>h.nbins()</code></td><td></td></tr><tr><td><code>h.Integral()</code></td><td><code>h.integral()</code></td><td>Sum of in-range bins.</td></tr><tr><td><code>h.GetEntries()</code></td><td><code>h.entries</code></td><td>A property, not a method.</td></tr><tr><td><code>h.GetMean()</code>, <code>h.GetStdDev()</code></td><td><code>h.mean()</code>, <code>h.std_dev()</code></td><td><code>None</code> for an empty histogram (ROOT returns 0).</td></tr><tr><td><code>h.GetQuantiles(...)</code></td><td><code>h.quantile(p)</code></td><td>One quantile per call.</td></tr><tr><td><code>h.GetBinContent(i)</code> for all i</td><td><code>h.contents()</code></td><td>numpy array, length <code>nbins</code>.</td></tr><tr><td><code>h.GetUnderflow()</code>, <code>h.GetOverflow()</code></td><td><code>h.underflow</code>, <code>h.overflow</code></td><td>Properties.</td></tr><tr><td><code>h1.Add(h2)</code> / <code>hadd</code></td><td><code>h1.merge(h2)</code></td><td>Requires identical binning. Associative and commutative.</td></tr><tr><td><code>TH2F(...)</code></td><td><code>td.Histogram2D(nx, xlo, xhi, ny, ylo, yhi)</code></td><td>Contents are indexed <code>[ix, iy]</code>.</td></tr><tr><td><code>h2.ProjectionX()</code></td><td><code>h2.project_x()</code></td><td>Returns a <code>Histogram1D</code>.</td></tr><tr><td><code>TTree</code> + <code>Draw</code> / <code>Project</code></td><td><code>td.LazyFrame.scan_dict(...)</code> or <code>scan_csv(...)</code>, then <code>.filter(...).collect()</code></td><td>Lazy, chunked, with predicate pushdown.</td></tr><tr><td><code>df.Filter(&quot;pt &gt; 20&quot;)</code></td><td><code>.filter(td.col(&quot;pt&quot;) &gt; 20.0)</code></td><td>Expressions are built in Python; there are no string cuts.</td></tr><tr><td><code>df.Define(&quot;pt2&quot;, &quot;pt*pt&quot;)</code></td><td><code>.with_column((td.col(&quot;pt&quot;) * td.col(&quot;pt&quot;)).alias(&quot;pt2&quot;))</code></td><td></td></tr><tr><td><code>TLorentzVector</code> invariant mass</td><td><code>td.invariant_mass(pt1, eta1, phi1, m1, pt2, eta2, phi2, m2)</code></td><td>Columnar: each argument is an expression or a scalar.</td></tr><tr><td><code>ROOT.Math.VectorUtil::DeltaR</code></td><td><code>td.delta_r(eta1, phi1, eta2, phi2)</code></td><td></td></tr><tr><td><code>hist.SaveAs(&quot;out.root&quot;)</code></td><td><code>h.to_dict()</code></td><td>There is no ROOT file format. Save the dict or the numpy arrays (for example with <code>np.savez</code>). Binary histogram serialisation exists in the Rust crate but is not yet exposed to Python.</td></tr></tbody></table></div>
+<h2 id="example-1-a-filled-histogram-with-errors">Example 1: a filled histogram with errors</h2>
+<p>PyROOT:</p>
+<pre><code class="language-python">import ROOT
+h = ROOT.TH1F(&quot;mll&quot;, &quot;m_ll;m [GeV];events&quot;, 60, 60.0, 120.0)
+for m in masses:
+    h.Fill(m)
+for i in range(1, h.GetNbinsX() + 1):
+    c, e = h.GetBinContent(i), h.GetBinError(i)
+    print(h.GetBinCenter(i), c, e)</code></pre>
+<p>tpt_dynamics:</p>
+<pre><code class="language-python">import numpy as np
+import tpt_dynamics as td
+
+h = td.Histogram1D(60, 60.0, 120.0)   # ROOT bins 1..60 are 0..59 here
+h.fill(np.asarray(masses))
+centers = h.bin_centers()
+for c, content, err in zip(centers, h.contents(), h.errors()):
+    print(c, content, err)</code></pre>
+<p>Note the index base: ROOT <code>GetBinContent(1)</code> is the first bin, and <code>tpt_dynamics</code> uses zero-based indices. Histograms here have no ROOT-style &quot;bin 0 is underflow&quot; convention; underflow and overflow are separate properties.</p>
+<h2 id="example-2-summing-histograms-from-several-files-hadd">Example 2: summing histograms from several files (<code>hadd</code>)</h2>
+<p>PyROOT:</p>
+<pre><code class="language-python">total = ROOT.TH1F(&quot;total&quot;, &quot;&quot;, 50, 0, 200)
+for name in [&quot;run1.root&quot;, &quot;run2.root&quot;]:
+    f = ROOT.TFile.Open(name)
+    total.Add(f.Get(&quot;pt&quot;))</code></pre>
+<p>tpt_dynamics: histograms are built per worker, then merged in memory. Histograms are not yet written to or read from files from Python; if you need to pass them between processes, send <code>to_dict()</code> output.</p>
+<pre><code class="language-python">import numpy as np
+import tpt_dynamics as td
+
+parts = []
+for chunk in chunks:                       # each chunk is a numpy array
+    h = td.Histogram1D(50, 0.0, 200.0)
+    h.fill(chunk)
+    parts.append(h)
+
+total = td.Histogram1D(50, 0.0, 200.0)
+for p in parts:
+    total.merge(p)</code></pre>
+<h2 id="example-3-a-selection-on-a-tree-like-dataset">Example 3: a selection on a tree-like dataset</h2>
+<p>PyROOT:</p>
+<pre><code class="language-python">tree.Draw(&quot;pt &gt;&gt; h(50, 0, 200)&quot;, &quot;pt &gt; 20 &amp;&amp; abs(eta) &lt; 2.5 &amp;&amp; njets &gt;= 2&quot;)</code></pre>
+<p>tpt_dynamics:</p>
+<pre><code class="language-python">import numpy as np
+import tpt_dynamics as td
+from tpt_dynamics import col
+
+data = {
+    &quot;pt&quot;: pt,           # numpy float64
+    &quot;eta&quot;: eta,         # numpy float64
+    &quot;njets&quot;: njets,     # numpy int64
+}
+sel = (col(&quot;pt&quot;) &gt; 20.0) &amp; (col(&quot;eta&quot;).ge(-2.5)) &amp; (col(&quot;eta&quot;).le(2.5)) &amp; (col(&quot;njets&quot;) &gt;= 2)
+
+selected = td.LazyFrame.scan_dict(data).filter(sel).collect()
+
+h = td.Histogram1D(50, 0.0, 200.0)
+h.fill(selected[&quot;pt&quot;])</code></pre>
+<p><code>abs(eta) &lt; 2.5</code> is written as two bounds, because the expression language has no <code>abs</code> yet. Only the expression functions listed in the reference (<code>invariant_mass</code>, <code>delta_r</code>, <code>transverse_momentum</code>) are available as built-ins.</p>
+<h2 id="example-4-a-2d-distribution-with-its-projections">Example 4: a 2D distribution with its projections</h2>
+<p>PyROOT:</p>
+<pre><code class="language-python">h2 = ROOT.TH2F(&quot;eta_phi&quot;, &quot;&quot;, 40, -2.5, 2.5, 32, -3.2, 3.2)
+for e, p in zip(eta, phi):
+    h2.Fill(e, p)
+proj = h2.ProjectionX(&quot;px&quot;)</code></pre>
+<p>tpt_dynamics:</p>
+<pre><code class="language-python">h2 = td.Histogram2D(40, -2.5, 2.5, 32, -3.2, 3.2)
+h2.fill(eta, phi)
+proj = h2.project_x()
+grid = h2.contents()        # shape (40, 32)</code></pre>
+<h2 id="plotting">Plotting</h2>
+<p><code>tpt_dynamics</code> has no <code>Draw()</code>. Plot the arrays with matplotlib:</p>
+<pre><code class="language-python">import matplotlib.pyplot as plt
+
+h = td.Histogram1D(50, 0.0, 200.0)
+h.fill(pt)
+plt.stairs(h.contents(), h.edges(), fill=False)
+plt.errorbar(h.bin_centers(), h.contents(), yerr=h.errors(), fmt=&quot;none&quot;)
+plt.xlabel(&quot;pT [GeV]&quot;)
+plt.ylabel(&quot;events&quot;)</code></pre>
+<h2 id="simulation-no-root-equivalent">Simulation (no ROOT equivalent)</h2>
+<p><code>run_simulation</code> runs a molecular dynamics simulation from a TOML string and returns energies as numpy arrays. See the package README for an example.</p>
+<footer>Source: <a href="https://github.com/tpt-solutions/tpt-dynamics/blob/master/docs/migration/pyroot.md">docs/migration/pyroot.md</a> (rendered by docs/site/build.py)</footer>
+</main>
+</div>
+</body>
+</html>
