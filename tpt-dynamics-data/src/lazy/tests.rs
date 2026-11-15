@@ -546,3 +546,37 @@ fn ragged_columns_are_rejected() {
         .unwrap_err();
     assert!(matches!(err, LazyError::Invalid(_)), "{err}");
 }
+
+#[test]
+fn constant_folding_collapses_literal_arithmetic() {
+    use super::expr::fold_constants;
+    // (2 * 3) + 1 folds to 7.0; the column reference is untouched.
+    let folded = fold_constants((lit(2.0) * lit(3.0)) + lit(1.0));
+    assert_eq!(folded, lit(7.0));
+    let mixed = fold_constants(col("pt1") * (lit(2_i64) + lit(3_i64)));
+    assert_eq!(mixed, col("pt1") * lit(5_i64));
+    let neg = fold_constants(-lit(4.0));
+    assert_eq!(neg, lit(-4.0));
+}
+
+#[test]
+fn constant_folding_leaves_type_errors_for_runtime() {
+    use super::expr::fold_constants;
+    // Bool + number is a type error; folding must not hide it.
+    let bad = lit(true) + lit(1.0);
+    assert_eq!(fold_constants(bad.clone()), bad);
+}
+
+#[test]
+fn folded_plans_match_unfolded_results_bit_for_bit() {
+    let df = synthetic(2_000, 9);
+    let lf = LazyFrame::scan(df.clone())
+        .with_column((col("pt1") * (lit(2.0) * lit(0.5) + lit(0.25))).alias("scaled"))
+        .filter(col("scaled").gt(lit(10.0) / lit(4.0)))
+        .select([col("scaled"), col("g")]);
+    let explained = lf.explain();
+    let opt = lf.clone().collect().unwrap();
+    let raw = lf.collect_unoptimized().unwrap();
+    assert_frames_close(&opt, &raw, 0.0);
+    assert!(explained.contains("2.5"), "{explained}");
+}

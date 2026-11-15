@@ -1,19 +1,43 @@
-//! Rule-based plan optimiser: predicate pushdown and projection pushdown.
+//! Rule-based plan optimiser: constant folding, predicate pushdown and projection pushdown.
 //!
-//! Both rules preserve results exactly. Predicate pushdown only moves a filter
+//! Every rule preserves results exactly. Predicate pushdown only moves a filter
 //! past operators whose outputs it does not depend on. Projection pushdown
 //! removes unused columns and unused with-column nodes, and tells the scan to
 //! read only the columns the plan needs.
 
 use std::collections::BTreeSet;
 
-use super::expr::Expr;
+use super::expr::{fold_constants, Expr};
 use super::plan::Plan;
 
 /// Applies all rules: push filters down first, then prune columns.
 pub(crate) fn optimize(plan: Plan) -> Plan {
+    let plan = fold_plan(plan);
     let plan = pushdown_predicates(plan);
     prune(plan, None)
+}
+
+/// Folds literal-only operators inside every expression of the plan. Aggregate
+/// inputs are left as written.
+fn fold_plan(plan: Plan) -> Plan {
+    match plan {
+        Plan::Scan { .. } => plan,
+        Plan::Filter { input, predicate } => Plan::Filter {
+            input: Box::new(fold_plan(*input)),
+            predicate: fold_constants(predicate),
+        },
+        Plan::Project { input, exprs } => Plan::Project {
+            input: Box::new(fold_plan(*input)),
+            exprs: exprs.into_iter().map(fold_constants).collect(),
+        },
+        Plan::WithColumn { input, expr } => Plan::WithColumn {
+            input: Box::new(fold_plan(*input)),
+            expr: fold_constants(expr),
+        },
+        Plan::Aggregate { input, keys, aggs } => {
+            Plan::Aggregate { input: Box::new(fold_plan(*input)), keys, aggs }
+        }
+    }
 }
 
 fn pushdown_predicates(plan: Plan) -> Plan {

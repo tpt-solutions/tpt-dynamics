@@ -574,3 +574,58 @@ fn delta_r_row(eta1: f64, phi1: f64, eta2: f64, phi2: f64) -> f64 {
     let deta = eta1 - eta2;
     deta.hypot(dphi)
 }
+
+/// Folds operators whose operands are all literals into a single literal.
+///
+/// The fold reuses the evaluator's own `unary` and `binary` kernels on one-row
+/// columns, so a folded constant is bit-identical to what the runtime would have
+/// produced for every row. Anything that would fail at runtime (a type error, for
+/// example) is left in place, so it still fails when the plan runs. Column
+/// references and physics calls are never folded.
+pub(crate) fn fold_constants(expr: Expr) -> Expr {
+    match expr {
+        Expr::Col(_) | Expr::Lit(_) => expr,
+        Expr::Alias { expr, name } => Expr::Alias { expr: Box::new(fold_constants(*expr)), name },
+        Expr::Call { func, args } => {
+            Expr::Call { func, args: args.into_iter().map(fold_constants).collect() }
+        }
+        Expr::Unary { op, arg } => {
+            let arg = fold_constants(*arg);
+            if let Expr::Lit(s) = &arg {
+                if let Ok(c) = unary(op, &scalar_column(s)) {
+                    if let Some(folded) = column_scalar(&c) {
+                        return Expr::Lit(folded);
+                    }
+                }
+            }
+            Expr::Unary { op, arg: Box::new(arg) }
+        }
+        Expr::Binary { op, lhs, rhs } => {
+            let lhs = fold_constants(*lhs);
+            let rhs = fold_constants(*rhs);
+            if let (Expr::Lit(a), Expr::Lit(b)) = (&lhs, &rhs) {
+                if let Ok(c) = binary(op, &scalar_column(a), &scalar_column(b)) {
+                    if let Some(folded) = column_scalar(&c) {
+                        return Expr::Lit(folded);
+                    }
+                }
+            }
+            Expr::Binary { op, lhs: Box::new(lhs), rhs: Box::new(rhs) }
+        }
+    }
+}
+
+/// A one-row column holding `s`.
+fn scalar_column(s: &Scalar) -> Column {
+    broadcast(s, 1)
+}
+
+/// The value of a one-row column, if it has exactly one row.
+fn column_scalar(c: &Column) -> Option<Scalar> {
+    match c {
+        Column::F64(v) if v.len() == 1 => Some(Scalar::F64(v[0])),
+        Column::I64(v) if v.len() == 1 => Some(Scalar::I64(v[0])),
+        Column::Bool(v) if v.len() == 1 => Some(Scalar::Bool(v[0])),
+        _ => None,
+    }
+}
