@@ -1,0 +1,41 @@
+[build-system]
+requires = ["maturin>=1.9,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "tpt-dynamics"
+# Version is read from the workspace Cargo.toml (single source of truth).
+dynamic = ["version"]
+description = "Python bindings for tpt-dynamics: lazy data frames, physics histograms and molecular dynamics runs."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT OR Apache-2.0"
+license-files = ["LICENSE-MIT", "LICENSE-APACHE"]
+authors = [{ name = "TPT Solutions" }]
+keywords = ["physics", "histogram", "molecular-dynamics", "hep", "lazy-dataframe"]
+classifiers = [
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Physics",
+    "Typing :: Typed",
+]
+dependencies = ["numpy>=1.23"]
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
+
+[project.urls]
+Repository = "https://github.com/tpt-solutions/tpt-dynamics"
+
+[tool.maturin]
+# The native module is tpt_dynamics._tpt_dynamics; the Python package wraps it.
+module-name = "tpt_dynamics._tpt_dynamics"
+python-source = "python"
+# Wheels link against the Python stable ABI (abi3-py311, set in Cargo.toml) and
+# must not link libpython, so the extension-module feature is enabled here.
+# This is set in pyproject.toml, not Cargo.toml, so `cargo test` still links.
+features = ["pyo3/extension-module"]
