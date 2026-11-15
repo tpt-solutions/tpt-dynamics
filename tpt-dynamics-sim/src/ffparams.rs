@@ -187,6 +187,12 @@ pub struct MoleculeDef {
     /// Explicit impropers as quadruples of template atom indices.
     #[serde(default)]
     pub impropers: Vec<[usize; 4]>,
+    /// Atom that bonds to the previous residue of a chain (residue templates only).
+    #[serde(default)]
+    pub head: Option<usize>,
+    /// Atom that bonds to the next residue of a chain (residue templates only).
+    #[serde(default)]
+    pub tail: Option<usize>,
 }
 
 /// A parsed, validated force-field parameter set.
@@ -234,6 +240,53 @@ pub struct FfOptions {
     pub modifier: Modifier,
     /// Electrostatic treatment.
     pub electrostatics: Electrostatics,
+}
+
+/// Rejects chain links whose neighbouring angles are nearly straight.
+///
+/// The harmonic angle force carries a `1/sin θ` factor, so a straight angle makes
+/// the forces singular and the energy non-smooth there. A residue template whose
+/// bonds at a link line up with the link direction hits this. Angles with
+/// `|cos θ| > 0.996` (within about 5° of straight) are refused.
+fn check_link_angles(
+    positions: &[Vec3],
+    bonds: &[(usize, usize)],
+    links: &[(usize, usize)],
+) -> Result<(), SimError> {
+    let mut adjacency: Vec<Vec<usize>> = vec![Vec::new(); positions.len()];
+    for &(i, j) in bonds {
+        adjacency[i].push(j);
+        adjacency[j].push(i);
+    }
+    for &(a, b) in links {
+        for (centre, other) in [(a, b), (b, a)] {
+            for &n in &adjacency[centre] {
+                if n == other {
+                    continue;
+                }
+                let u = positions[n] - positions[centre];
+                let v = positions[other] - positions[centre];
+                let cos = u.dot(v) / (u.norm() * v.norm());
+                if cos.abs() > 0.996 {
+                    return Err(SimError::Config(format!(
+                        "link {a}-{b} makes a nearly straight angle at atom {centre}; \
+                         give the residue templates a bent geometry at their head and tail"
+                    )));
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Reference position of a template atom, as a vector.
+fn template_pos_of(p: &[f64; 3]) -> Vec3 {
+    Vec3::new(p[0], p[1], p[2])
+}
+
+/// Reference position of template atom `i` (caller checks the index).
+fn template_pos(m: &MoleculeDef, i: usize) -> Vec3 {
+    template_pos_of(&m.atoms[i].position)
 }
 
 /// A system and its bonded topology, produced by [`ParamSet::assemble`].
@@ -330,6 +383,24 @@ impl ParamSet {
                 return bad(format!("improper type {:?}: invalid parameters", d.types));
             }
         }
+        self.validate_molecules()?;
+        Ok(())
+    }
+
+    fn atom_type_index(&self, name: &str) -> Option<usize> {
+        self.atomtype.iter().position(|a| a.name == name)
+    }
+
+    fn molecule(&self, name: &str) -> Result<&MoleculeDef, SimError> {
+        self.molecule
+            .iter()
+            .find(|m| m.name == name)
+            .ok_or_else(|| SimError::Config(format!("no molecule template named {name}")))
+    }
+
+    /// Checks every molecule template: atom types, finite values and index ranges.
+    fn validate_molecules(&self) -> Result<(), SimError> {
+        let bad = |m: String| Err(SimError::Config(m));
         for m in &self.molecule {
             let n = m.atoms.len();
             if n == 0 {
@@ -359,19 +430,13 @@ impl ParamSet {
                     return bad(format!("molecule {}: improper {q:?} is invalid", m.name));
                 }
             }
+            for (label, idx) in [("head", m.head), ("tail", m.tail)] {
+                if idx.is_some_and(|i| i >= n) {
+                    return bad(format!("molecule {}: {label} atom index is out of range", m.name));
+                }
+            }
         }
         Ok(())
-    }
-
-    fn atom_type_index(&self, name: &str) -> Option<usize> {
-        self.atomtype.iter().position(|a| a.name == name)
-    }
-
-    fn molecule(&self, name: &str) -> Result<&MoleculeDef, SimError> {
-        self.molecule
-            .iter()
-            .find(|m| m.name == name)
-            .ok_or_else(|| SimError::Config(format!("no molecule template named {name}")))
     }
 
     /// Builds a system containing one copy of each placed molecule. Each entry
@@ -411,6 +476,98 @@ impl ParamSet {
             mol_topo.impropers.clone_from(&m.impropers);
             topo.append_shifted(&mol_topo, base);
         }
+        system.topology = topo;
+        system.validate()?;
+        Ok(Assembled { system })
+    }
+
+    /// Builds linear chains of residues: proteins, nucleic acids and lipid tails.
+    ///
+    /// Each chain is a sequence of template names and an origin. Residue `k+1`
+    /// bonds from its `head` atom to the `tail` atom of residue `k`. Each residue
+    /// after the first is translated so that its head lies `bond_length` nm along
+    /// +x from the previous tail, so every template keeps its reference geometry.
+    /// The first residue of a chain is translated to the chain's origin. Angles,
+    /// dihedrals and 1-4 pairs come from the full bond graph, so they span residue
+    /// boundaries. Several chains may be combined in one system (for example a
+    /// membrane of lipid chains).
+    ///
+    /// # Errors
+    /// Returns [`SimError::Config`] for unknown templates, a non-positive
+    /// `bond_length`, an empty chain, or a residue that cannot be linked (no
+    /// `tail` before another residue, or no `head` after one). Returns
+    /// [`SimError::Invalid`] if the generated topology is inconsistent.
+    pub fn assemble_chains(
+        &self,
+        chains: &[(&[&str], Vec3)],
+        bond_length: f64,
+        sim_box: SimBox,
+    ) -> Result<Assembled, SimError> {
+        if !(bond_length.is_finite() && bond_length > 0.0) {
+            return Err(SimError::Config("bond_length must be positive and finite".into()));
+        }
+        let mut system = System::new(sim_box);
+        let mut bonds: Vec<(usize, usize)> = Vec::new();
+        let mut links: Vec<(usize, usize)> = Vec::new();
+        let mut impropers: Vec<[usize; 4]> = Vec::new();
+        let mut resid = 0usize;
+        for (residues, origin) in chains {
+            if residues.is_empty() {
+                return Err(SimError::Config("chain has no residues".into()));
+            }
+            // Global index and world position of the tail atom of the previous residue.
+            let mut link: Option<(usize, Vec3)> = None;
+            for (k, name) in residues.iter().enumerate() {
+                let m = self.molecule(name)?;
+                let base = system.len();
+                let shift = match link {
+                    None => *origin,
+                    Some((_, tail_world)) => {
+                        let head = m.head.ok_or_else(|| {
+                            SimError::Config(format!(
+                                "residue {name} follows another residue but has no head atom"
+                            ))
+                        })?;
+                        let h = template_pos(m, head);
+                        tail_world + Vec3::new(bond_length, 0.0, 0.0) - h
+                    }
+                };
+                if let (Some((tail_global, _)), Some(head)) = (link, m.head) {
+                    bonds.push((tail_global, base + head));
+                    links.push((tail_global, base + head));
+                }
+                for a in &m.atoms {
+                    let mass = self.atomtype[self.atom_type_index(&a.atom_type).unwrap_or(0)].mass;
+                    system.push_atom(NewAtom {
+                        name: a.name.clone(),
+                        residue_name: m.name.chars().take(3).collect(),
+                        residue_id: i32::try_from(resid + 1).unwrap_or(i32::MAX),
+                        element: String::new(),
+                        position: template_pos_of(&a.position) + shift,
+                        velocity: Vec3::ZERO,
+                        mass,
+                        charge: a.charge,
+                        atom_type: self.atom_type_index(&a.atom_type).unwrap_or(0) as u16,
+                    });
+                }
+                bonds.extend(m.bonds.iter().map(|&[i, j]| (base + i, base + j)));
+                impropers.extend(m.impropers.iter().map(|q| q.map(|x| base + x)));
+                resid += 1;
+                link = if k + 1 < residues.len() {
+                    let t = m.tail.ok_or_else(|| {
+                        SimError::Config(format!(
+                            "residue {name} is followed by another residue but has no tail atom"
+                        ))
+                    })?;
+                    Some((base + t, template_pos(m, t) + shift))
+                } else {
+                    None
+                };
+            }
+        }
+        check_link_angles(&system.positions, &bonds, &links)?;
+        let mut topo = Topology::from_bonds(system.len(), &bonds)?;
+        topo.impropers = impropers;
         system.topology = topo;
         system.validate()?;
         Ok(Assembled { system })
