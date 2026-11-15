@@ -30,10 +30,9 @@ fn fold_plan(plan: Plan) -> Plan {
             input: Box::new(fold_plan(*input)),
             exprs: exprs.into_iter().map(fold_constants).collect(),
         },
-        Plan::WithColumn { input, expr } => Plan::WithColumn {
-            input: Box::new(fold_plan(*input)),
-            expr: fold_constants(expr),
-        },
+        Plan::WithColumn { input, expr } => {
+            Plan::WithColumn { input: Box::new(fold_plan(*input)), expr: fold_constants(expr) }
+        }
         Plan::Aggregate { input, keys, aggs } => {
             Plan::Aggregate { input: Box::new(fold_plan(*input)), keys, aggs }
         }

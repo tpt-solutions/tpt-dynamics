@@ -292,7 +292,9 @@ mod parquet_targets {
 /// rejected or decoded without a panic, including random frame access.
 mod trajectory_targets {
     use super::*;
-    use tpt_dynamics_data::trajectory::{Frame, FrameSink, Precision, TrajectoryReader, TrajectoryWriter};
+    use tpt_dynamics_data::trajectory::{
+        Frame, FrameSink, Precision, TrajectoryReader, TrajectoryWriter,
+    };
 
     fn valid_trajectory() -> Vec<u8> {
         let mut w = TrajectoryWriter::new(Vec::new(), 3, Precision::F32, 4).unwrap();
