@@ -25,6 +25,7 @@
 
 mod exec;
 mod expr;
+mod fill;
 mod frame;
 mod optimize;
 mod plan;
