@@ -46,7 +46,7 @@ the project uses [Semantic Versioning](https://semver.org/) once it reaches 0.1.
 
 - `tptdyn analyze` streams the CSV in chunks of 1,048,576 rows. Memory no longer grows with the file: a 10.49 GB file peaks at 554 MB. Column statistics are running (Welford) values; a column that is integer in some chunks and fractional in others is reported as `f64`.
 - `lazy::distributed`: a coordinator splits a source's rows across TCP workers, which run the row-wise stages and return partial aggregates or rows. Results are merged in worker order. Plans are `DistributedPlan` (filter, select, with-column, group-by aggregate). The protocol has no authentication, so run workers only on a trusted network.
-- `rowstore`: a fixed-width binary column file that serves any row range with one seek per column. It implements `lazy::Source`.
+- `rowstore`: a fixed-width binary column file that serves any row range with one seek per column. It implements `lazy::Source` and can be read over plain HTTP `Range` requests (`RowStore::open_http`, no TLS).
 - `examples/generate_trajectory.rs`: writes a synthetic trajectory one frame at a time.
 - Measurements and reproduction commands are in `docs/benchmarks/large-data.md`.
 

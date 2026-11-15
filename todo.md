@@ -272,7 +272,7 @@ Legend: `- [ ]` todo · `- [x]` done · **bold** = milestone
 - [x] Distributed execution of lazy plans across nodes (`lazy::distributed`; verified over loopback TCP, not yet across separate machines)
 - [x] Histogram merging across nodes
 - [x] Python histogram interop (boost-histogram/hist-style API)
-- [ ] Network/object-store data sources
+- [ ] Network/object-store data sources — plain HTTP range reads done (`RowStore::open_http`); HTTPS and object-store authentication not done (no TLS dependency yet)
 
 ---
 
