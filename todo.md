@@ -210,7 +210,7 @@ Legend: `- [ ]` todo · `- [x]` done · **bold** = milestone
 - [x] NumPy interop (check licence of `numpy`/`rust-numpy` crate)
 - [x] Type stubs (`.pyi`) and Python docs
 - [x] PyROOT-style migration examples
-- [ ] Wheels: Linux, Windows, macOS (x86_64 + arm64)
+- [ ] Wheels: Linux, Windows, macOS (x86_64 + arm64) — workflow `.github/workflows/wheels.yml` is in place; the Windows x86_64 wheel was built with maturin and its 42 binding tests pass from a clean venv; the CI run is still pending
 - [x] Python test suite in CI
 
 ### Release
@@ -234,7 +234,7 @@ Legend: `- [ ]` todo · `- [x]` done · **bold** = milestone
 - [x] 1-4 interactions and exclusions
 - [x] AMBER, CHARMM, GROMOS parameter sets supported as user-supplied files in the `ffparams` format (none bundled)
 - [x] Redistribution licence check before bundling (N/A: no parameter set is bundled)
-- [ ] Support for proteins, lipids, nucleic acids
+- [ ] Support for proteins, lipids, nucleic acids — residue-chain assembly (`ParamSet::assemble_chains`) is done; no parameter set is bundled and nothing is validated against reference data (see docs/forcefield.md)
 - [x] SHAKE constraints
 - [x] LINCS constraints (spec writes "LINCOLN"; assumed to mean LINCS)
 - [x] SETTLE for rigid water models (TIP3P, SPC/E, TIP4P)
@@ -281,7 +281,7 @@ Legend: `- [ ]` todo · `- [x]` done · **bold** = milestone
 - [ ] GPU backend for `tpt-dynamics-compute` (evaluate wgpu etc.; licence-check first)
 - [ ] GPU force kernels and PME
 - [x] Embedded / FPGA DAQ demo using `no_std` core
-- [ ] Fuzzing campaign for all parsers
+- [ ] Fuzzing campaign for all parsers — stable-toolchain campaign run at 200,000 iterations per generator with no findings (docs/fuzzing.md section 4); coverage-guided cargo-fuzz runs remain
 - [x] Unsafe-code audit
 - [x] Security review
 - [x] Performance regression tracking in CI

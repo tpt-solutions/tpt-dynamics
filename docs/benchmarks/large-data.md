@@ -80,6 +80,18 @@ across separate machines.
 - 1M-atom strong and weak scaling beyond 20 threads: this machine has 20 cores.
   The existing data is in `scaling-raw.txt`.
 - Comparison with PyROOT / RDataFrame and GROMACS: neither is installed.
-- Parallel CSV parsing: the 36 MB/s figure is single-threaded, so the analyze
-  time is parse-bound. Parallel parsing is the obvious next step if the
-  PyROOT comparison needs to be won on raw speed.
+
+## Parallel CSV parsing (later the same day)
+
+`tptdyn analyze` now parses fields on the rayon pool (`CsvReader::next_batch`)
+and converts columns in parallel. The same 10.49 GB file, same arguments:
+
+| Quantity | Before | After |
+|---|---|---|
+| Wall time | 293.5 s | 215.7 s |
+| Peak working set | 554 MB | 552 MB |
+| Histogram output | | byte-identical |
+
+The remaining serial work is line reading, the per-field `String` allocations,
+and the running statistics and histogram folding, which run on one thread per
+chunk. Those are the next candidates if the PyROOT comparison needs more speed.
