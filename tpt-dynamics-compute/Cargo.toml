@@ -1,0 +1,20 @@
+[package]
+name = "tpt-dynamics-compute"
+description = "SIMD and GPU acceleration kernels for tpt-dynamics: LJ/Coulomb pair kernels, cluster pair lists, and particle-mesh Ewald."
+version.workspace = true
+edition.workspace = true
+# Raised above the workspace MSRV (1.85) because `tpt-simd` 0.1.1 requires Rust 1.95.
+rust-version = "1.95"
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+readme = "README.md"
+publish = true
+
+[dependencies]
+libm.workspace = true
+rayon = "1"
+tpt-simd = "0.1.1"
+
+[lints]
+workspace = true
