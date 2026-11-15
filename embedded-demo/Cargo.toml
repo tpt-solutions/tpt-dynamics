@@ -1,0 +1,19 @@
+[package]
+name = "embedded-demo"
+description = "Fixed-point event-stream filter for a DAQ front end, built on the no_std tpt-dynamics-core."
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+authors = ["TPT Solutions"]
+publish = false
+
+# Standalone workspace: this crate is deliberately not a member of the root
+# workspace, so a root-level `cargo build` does not build it.
+[workspace]
+
+[dependencies]
+tpt-dynamics-core = { path = "../tpt-dynamics-core", default-features = false }
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
