@@ -1,0 +1,25 @@
+# strong scaling: fixed 1,000,000 atoms (100x100x100 simple cubic), domain engine
+mode=domain atoms=1000000 threads=1 steps=10 wall_s=38.9924 ms_per_step=3899.237 u_per_atom=-4.232059 dims=1x1x1 rebalances=0 migrated=0 ghosts_sent=0 imbalance=1.000 t_migrate=0.567 t_ghost=0.447 t_force=37.278 t_kick=0.348
+mode=domain atoms=1000000 threads=2 steps=10 wall_s=18.9359 ms_per_step=1893.591 u_per_atom=-4.232059 dims=1x1x2 rebalances=0 migrated=655 ghosts_sent=1193654 imbalance=1.000 t_migrate=0.597 t_ghost=0.539 t_force=17.532 t_kick=0.229
+mode=domain atoms=1000000 threads=4 steps=10 wall_s=10.8732 ms_per_step=1087.320 u_per_atom=-4.232059 dims=1x2x2 rebalances=0 migrated=1320 ghosts_sent=2387308 imbalance=1.000 t_migrate=0.407 t_ghost=0.475 t_force=9.687 t_kick=0.165
+mode=domain atoms=1000000 threads=8 steps=10 wall_s=5.7153 ms_per_step=571.530 u_per_atom=-4.232059 dims=2x2x2 rebalances=0 migrated=1968 ghosts_sent=3582215 imbalance=1.001 t_migrate=0.359 t_ghost=0.406 t_force=4.810 t_kick=0.091
+mode=domain atoms=1000000 threads=16 steps=10 wall_s=2.2062 ms_per_step=220.623 u_per_atom=-4.232059 dims=2x2x4 rebalances=0 migrated=2657 ghosts_sent=4872036 imbalance=1.001 t_migrate=0.213 t_ghost=0.284 t_force=1.491 t_kick=0.115
+mode=domain atoms=1000000 threads=20 steps=10 wall_s=3.3769 ms_per_step=337.686 u_per_atom=-4.232059 dims=2x2x5 rebalances=0 migrated=2918 ghosts_sent=5516945 imbalance=1.002 t_migrate=0.473 t_ghost=0.515 t_force=2.449 t_kick=0.080
+# strong scaling: fixed 1,000,000 atoms, single-domain engine (rayon pool of t threads)
+mode=single atoms=1000000 threads=1 steps=10 wall_s=13.7297 ms_per_step=1372.970 u_per_atom=-4.232059
+mode=single atoms=1000000 threads=2 steps=10 wall_s=14.0612 ms_per_step=1406.119 u_per_atom=-4.232059
+mode=single atoms=1000000 threads=4 steps=10 wall_s=13.1435 ms_per_step=1314.354 u_per_atom=-4.232059
+mode=single atoms=1000000 threads=8 steps=10 wall_s=10.1215 ms_per_step=1012.145 u_per_atom=-4.232059
+mode=single atoms=1000000 threads=16 steps=10 wall_s=9.8585 ms_per_step=985.846 u_per_atom=-4.232059
+mode=single atoms=1000000 threads=20 steps=10 wall_s=9.7889 ms_per_step=978.890 u_per_atom=-4.232059
+# single-domain profile on the final configuration (1 thread and 20 threads)
+mode=single atoms=1000000 threads=1 steps=10 wall_s=13.3335 ms_per_step=1333.351 u_per_atom=-4.232059 profile_rebuild_ms=4845.16 profile_force_ms=738.18
+mode=single atoms=1000000 threads=20 steps=10 wall_s=10.1682 ms_per_step=1016.821 u_per_atom=-4.232059 profile_rebuild_ms=944.31 profile_force_ms=705.72
+# weak scaling: 50,000 atoms per thread, box 50 x 50 x (20 t) cells, domain engine
+mode=domain atoms=50000 threads=1 steps=10 wall_s=0.7168 ms_per_step=71.677 u_per_atom=-4.232871 dims=1x1x1 rebalances=0 migrated=0 ghosts_sent=0 imbalance=1.000 t_migrate=0.013 t_ghost=0.011 t_force=0.677 t_kick=0.005
+mode=domain atoms=100000 threads=2 steps=10 wall_s=0.7725 ms_per_step=77.246 u_per_atom=-4.232904 dims=1x2x1 rebalances=0 migrated=144 ghosts_sent=262836 imbalance=1.000 t_migrate=0.035 t_ghost=0.027 t_force=0.700 t_kick=0.008
+mode=domain atoms=200000 threads=4 steps=10 wall_s=1.4763 ms_per_step=147.626 u_per_atom=-4.232464 dims=1x2x2 rebalances=0 migrated=423 ghosts_sent=823768 imbalance=1.002 t_migrate=0.149 t_ghost=0.079 t_force=1.274 t_kick=0.011
+mode=domain atoms=400000 threads=8 steps=10 wall_s=1.6636 ms_per_step=166.358 u_per_atom=-4.231468 dims=1x2x4 rebalances=0 migrated=902 ghosts_sent=1647539 imbalance=1.001 t_migrate=0.160 t_ghost=0.157 t_force=1.298 t_kick=0.020
+mode=domain atoms=800000 threads=16 steps=10 wall_s=2.5452 ms_per_step=254.516 u_per_atom=-4.232069 dims=1x2x8 rebalances=0 migrated=1649 ghosts_sent=3295075 imbalance=1.001 t_migrate=0.447 t_ghost=0.354 t_force=1.777 t_kick=0.040
+mode=domain atoms=1000000 threads=20 steps=10 wall_s=3.0287 ms_per_step=302.870 u_per_atom=-4.231883 dims=1x2x10 rebalances=0 migrated=2060 ghosts_sent=4118841 imbalance=1.002 t_migrate=0.564 t_ghost=0.571 t_force=2.079 t_kick=0.027
+EXIT 0

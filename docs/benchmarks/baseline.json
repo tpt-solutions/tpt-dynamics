@@ -1,0 +1,8 @@
+{
+  "metrics": {
+    "hist1d_fill_ns_per_entry": 11.210,
+    "serialise_roundtrip_ns_per_hist": 107218.000,
+    "csv_parse_ns_per_record": 167.839,
+    "jagged_sum_ns_per_event": 7.906
+  }
+}
