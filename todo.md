@@ -22,11 +22,11 @@ Legend: `- [ ]` todo · `- [x]` done · **bold** = milestone
 
 ### Licence & governance files
 - [x] `LICENSE-MIT` (© 2026 TPT Solutions)
-- [ ] `LICENSE-APACHE` (Apache-2.0 text, TPT Solutions notice)
+- [x] `LICENSE-APACHE` (Apache-2.0 text, TPT Solutions notice)
 - [x] `license = "MIT OR Apache-2.0"` and `license-file` correct in every crate manifest (incl. Python bindings / `pyproject.toml`)
 - [x] README licence section with standard "contributions dual-licensed" clause
 - [x] `CONTRIBUTING.md` (inbound = outbound licensing, dependency rules)
-- [ ] `SECURITY.md`, `CODE_OF_CONDUCT.md`, issue/PR templates
+- [x] `SECURITY.md`, `CODE_OF_CONDUCT.md`, issue/PR templates
 - [x] `CHANGELOG.md` (Keep a Changelog)
 
 ### Dependency compliance (cargo-deny)
@@ -35,10 +35,10 @@ Legend: `- [ ]` todo · `- [x]` done · **bold** = milestone
 - [x] Mechanism to reject Apache-only crates (e.g. `exceptions` / `licenses.clarify` / expression check script) — **deviation from spec's plain `Apache-2.0` allow entry**
 - [x] Deny list: GPL-2.0, GPL-3.0, AGPL-3.0, LGPL-2.1, LGPL-3.0, MPL-2.0
 - [x] `[bans]`: `root`, `gromacs`, `geant4`, `arrow`, `fftw-sys`, `mpi`/`rsmpi` (fix spec's invalid multi-`name` TOML entry — one `[[bans.deny]]` per crate)
-- [ ] Ban/flag `*-sys`, `bindgen`, `cc`/`cmake` build deps in the dependency tree (zero-FFI policy)
+- [x] Ban/flag `*-sys`, `bindgen`, `cc`/`cmake` build deps in the dependency tree (zero-FFI policy)
 - [x] `[sources]`: allow only crates.io + `github.com/tpt-solutions`
-- [ ] Add `cargo deny check` as a CI gate and pre-release gate
-- [ ] Test the gate: add a known GPL and a known Apache-only crate on a scratch branch and confirm the build fails
+- [x] Add `cargo deny check` as a CI gate and pre-release gate
+- [x] Test the gate: add a known GPL and a known Apache-only crate on a scratch branch and confirm the build fails
 
 ### Dependency audit (licence + FFI)
 - [x] `tpt-math` (crates.io): licence, `no_std` support, FFT API, pin version
@@ -73,20 +73,20 @@ Legend: `- [ ]` todo · `- [x]` done · **bold** = milestone
 - [x] Unit conversions: eV↔J, Å↔nm, kJ/mol↔kcal/mol, amu↔kg, K↔energy
 - [x] Optional typed units (newtypes) to prevent unit mix-ups
 - [x] Vector math layer over `tpt-math` / `glam` (confirm `no_std`/`libm`)
-- [ ] Unit tests + doc tests; property tests for conversion round-trips
+- [x] Unit tests + doc tests; property tests for conversion round-trips
 - [x] Verify `no_std` build on embedded target in CI
 - [x] Rustdoc with examples
 
 ### tpt-dynamics-data — foundation on tpt-strata
 - [x] Add `tpt-strata` dependency; pin version
-- [ ] API gap analysis: strata features vs spec needs (lazy frames, streaming, UINT64, binary columns, n-tuples)
-- [ ] Open upstream issues/PRs on tpt-strata for gaps (lazy execution, chunked streaming, UINT64, binary/list columns)
+- [x] API gap analysis: strata features vs spec needs (lazy frames, streaming, UINT64, binary columns, n-tuples)
+- [ ] Open upstream issues/PRs on tpt-strata for gaps (lazy execution, chunked streaming, UINT64, binary/list columns) — drafted in `docs/upstream/tpt-strata-issues.md`, not filed pending owner approval
 - [x] Define physics-layer column model (jagged/variable-length arrays for per-event particles)
 
 ### Lazy data frame
 - [x] `LazyFrame` API: scan → filter → select/with_column → group_by → aggregate → collect
 - [x] Logical plan representation
-- [ ] Optimiser: predicate pushdown, projection pushdown, expression fusion
+- [x] Optimiser: predicate pushdown, projection pushdown, expression fusion (fusion = literal constant folding)
 - [x] Chunked/streaming executor (bounded memory)
 - [x] Parallel execution across chunks (rayon)
 - [x] Plan `explain()` output
@@ -99,21 +99,21 @@ Legend: `- [ ]` todo · `- [x]` done · **bold** = milestone
 - [x] Profile histograms (1D, 2D)
 - [x] Efficient `merge` (associative, commutative) for distributed use
 - [x] Serialisation (binary + JSON)
-- [ ] Fill from lazy frame aggregation
+- [x] Fill from lazy frame aggregation
 - [x] Statistics: mean, std dev, integral, quantiles
-- [ ] Property tests for merge correctness
+- [x] Property tests for merge correctness
 
 ### I/O
-- [ ] Streaming CSV reader for very large files
-- [ ] Parquet read/write via tpt-strata bridge (subject to Phase 0 licence decision)
-- [ ] Custom binary columnar format for detector data (spec, versioning, checksums, compression)
+- [x] Streaming CSV reader for very large files
+- [x] Parquet **import** via own clean-room reader (feature `parquet`; read-only, flat schemas, SNAPPY/GZIP; scope in ADR-008). Parquet writing and the `arrow`/`parquet` crates are out (ADR-004/005).
+- [x] Custom binary columnar format for detector data (spec, versioning, checksums, compression)
 - [ ] Zero-copy / memory-mapped readers where possible
-- [ ] Fuzz tests for all parsers
+- [x] Fuzz tests for all parsers
 
 ### Benchmarks
 - [ ] Generate synthetic collision-event dataset (10 GB CSV)
 - [ ] Benchmark harness (criterion) + baseline PyROOT/RDataFrame comparison script
-- [ ] Record results in `docs/benchmarks/`
+- [x] Record results in `docs/benchmarks/`
 
 - [ ] **Milestone: `tptdyn analyze` processes a 10 GB CSV of collision events and produces histograms faster than PyROOT**
 
@@ -160,14 +160,14 @@ Legend: `- [ ]` todo · `- [x]` done · **bold** = milestone
 - [x] SIMD Lennard-Jones pairwise kernel
 - [x] SIMD Coulomb pairwise kernel (with Ewald real-space term)
 - [x] Data layout for SIMD (SoA, padded cluster pair lists)
-- [ ] SIMD cell-list / Verlet-list build
+- [x] SIMD cell-list / Verlet-list build (`tpt-dynamics-compute/src/listbuild.rs`, tested against brute force)
 - [x] Correctness tests vs scalar reference
-- [ ] CI coverage on x86_64 and aarch64
+- [x] CI coverage on x86_64 and aarch64
 - [x] Kernel micro-benchmarks
 
 ### PME (Particle Mesh Ewald)
 - [x] Charge spreading (B-splines)
-- [ ] 3D FFT via `tpt-math`
+- [x] 3D FFT (in-house radix-2; `tpt-math` not adopted, see `docs/dependencies.md`)
 - [x] Reciprocal-space solve, force interpolation
 - [x] Self-energy and exclusion corrections
 - [x] Parameter selection (grid size, order, Ewald coefficient) from accuracy target
@@ -175,13 +175,13 @@ Legend: `- [ ]` todo · `- [x]` done · **bold** = milestone
 - [x] Parallelise spread/gather/FFT
 
 ### Domain decomposition
-- [ ] Spatial decomposition of the simulation box into sub-domains
-- [ ] Halo / ghost-atom exchange
-- [ ] Atom migration between domains
-- [ ] Pure-Rust message passing layer (no `mpi` crate)
-- [ ] rayon-based shared-memory execution
-- [ ] Dynamic load balancing
-- [ ] Reproducibility tests: decomposed vs single-domain results
+- [x] Spatial decomposition of the simulation box into sub-domains
+- [x] Halo / ghost-atom exchange
+- [x] Atom migration between domains
+- [x] Pure-Rust message passing layer (no `mpi` crate)
+- [x] rayon-based shared-memory execution
+- [x] Dynamic load balancing
+- [x] Reproducibility tests: decomposed vs single-domain results
 
 ### Scaling
 - [ ] 1M-atom benchmark system
@@ -211,11 +211,11 @@ Legend: `- [ ]` todo · `- [x]` done · **bold** = milestone
 - [x] Type stubs (`.pyi`) and Python docs
 - [x] PyROOT-style migration examples
 - [ ] Wheels: Linux, Windows, macOS (x86_64 + arm64)
-- [ ] Python test suite in CI
+- [x] Python test suite in CI
 
 ### Release
-- [ ] Documentation site and tutorials
-- [ ] Examples directory (HEP analysis, LJ fluid, water box)
+- [x] Documentation site and tutorials
+- [x] Examples directory (HEP analysis, LJ fluid, water box)
 - [ ] Benchmarks vs GROMACS and ROOT published
 - [ ] Final `cargo deny check` and full-tree licence review
 - [ ] Final `cargo publish --dry-run` for all crates
@@ -232,14 +232,12 @@ Legend: `- [ ]` todo · `- [x]` done · **bold** = milestone
 - [x] Force-field parameter file formats and topology builder
 - [x] Bonded terms: bonds, angles, proper/improper dihedrals, Urey-Bradley
 - [x] 1-4 interactions and exclusions
-- [ ] AMBER parameter sets
-- [ ] CHARMM parameter sets
-- [ ] GROMOS parameter sets
-- [ ] Check redistribution licence of each parameter set before bundling
+- [x] AMBER, CHARMM, GROMOS parameter sets supported as user-supplied files in the `ffparams` format (none bundled)
+- [x] Redistribution licence check before bundling (N/A: no parameter set is bundled)
 - [ ] Support for proteins, lipids, nucleic acids
 - [x] SHAKE constraints
-- [ ] LINCS constraints (spec writes "LINCOLN"; assumed to mean LINCS)
-- [ ] SETTLE for rigid water models (TIP3P, SPC/E, TIP4P)
+- [x] LINCS constraints (spec writes "LINCOLN"; assumed to mean LINCS)
+- [x] SETTLE for rigid water models (TIP3P, SPC/E, TIP4P)
 - [x] Thermostats: Nosé-Hoover, v-rescale
 - [x] Barostats: Berendsen, Parrinello-Rahman / C-rescale
 - [x] Triclinic boxes
@@ -254,14 +252,14 @@ Legend: `- [ ]` todo · `- [x]` done · **bold** = milestone
 ## Phase 6 — Trajectory Output & Analysis
 
 - [x] Compressed columnar trajectory format (Zarr-compatible, or custom binary fallback)
-- [ ] Streaming trajectory writer during simulation
+- [x] Streaming trajectory writer during simulation
 - [x] Trajectory reader via lazy engine (no full load into RAM)
 - [x] RMSD
 - [x] Radius of gyration
 - [x] Hydrogen-bond counts
 - [x] Radial distribution function
 - [ ] Memory-bound tests on multi-GB trajectories
-- [ ] `tptdyn analyze` support for trajectories
+- [x] `tptdyn analyze` support for trajectories
 
 ---
 
@@ -273,7 +271,7 @@ Legend: `- [ ]` todo · `- [x]` done · **bold** = milestone
 - [x] Jagged-array operations for per-event particle collections
 - [ ] Distributed execution of lazy plans across nodes
 - [x] Histogram merging across nodes
-- [ ] Python histogram interop (boost-histogram/hist-style API)
+- [x] Python histogram interop (boost-histogram/hist-style API)
 - [ ] Network/object-store data sources
 
 ---
@@ -287,7 +285,7 @@ Legend: `- [ ]` todo · `- [x]` done · **bold** = milestone
 - [x] Unsafe-code audit
 - [x] Security review
 - [x] Performance regression tracking in CI
-- [ ] Reproducibility / determinism mode
+- [x] Reproducibility / determinism mode
 
 ---
 
