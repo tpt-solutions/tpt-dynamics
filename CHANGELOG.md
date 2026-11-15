@@ -35,6 +35,13 @@ the project uses [Semantic Versioning](https://semver.org/) once it reaches 0.1.
 - Embedded demo (`embedded-demo/`, separate workspace) building for `thumbv7em-none-eabihf`.
 - Audit and documentation: unsafe-code audit, security review, fuzzing guide, tutorials, benchmark regression workflow.
 
+### Added (checklist reconciliation, unreleased)
+
+- `SECURITY.md` (private reporting, scope), `CODE_OF_CONDUCT.md`, and a pull request template.
+- `deny.toml` now denies `cc`; the `*-sys` rule is enforced by the CI `zero-ffi` job.
+- `LazyFrame::fill_histogram`: fills a `Histogram1D` from a lazy plan, optionally weighted.
+- `parquet` feature (off by default): read-only Parquet import with an own reader, for flat schemas, SNAPPY/GZIP/uncompressed codecs and dictionary encoding (ADR-008).
+
 ### Known issues
 
 - None open on licences: `target-lexicon` is replaced by the MIT-licensed `target-lexicon-mit` via `[patch.crates-io]`, and the LLVM-exception allowance is removed (ADR-005 amendment, later 2026-11-16).

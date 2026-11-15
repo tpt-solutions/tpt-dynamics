@@ -47,10 +47,13 @@ deny = [
     { crate = "rsmpi", reason = "Complex FFI. Use rayon or pure-Rust message passing." },
     { crate = "bindgen", reason = "Zero-FFI policy." },
     { crate = "cmake", reason = "Zero-FFI policy: no C/C++ build step." },
+    { crate = "cc", reason = "Zero-FFI policy: C compiler driver (build step). Not permitted in the normal or build tree." },
 ]
-# `*-sys` crates are FFI bindings by definition; the zero-FFI policy forbids them.
-# Matched by pattern below; `cc` (C compiler driver) is flagged for review rather
-# than denied, because some pure-Rust crates use it for optional code paths.
+# `*-sys` crates are FFI bindings by definition and cargo-deny cannot match by
+# pattern, so the CI job `zero-ffi` (.github/workflows/ci.yml) fails the build if a
+# `*-sys` crate is in the normal dependency tree. Known exception: `windows-sys`,
+# a raw Windows API binding pulled in only through the Windows target (see
+# docs/release-checklist.md section 3).
 skip = []
 skip-tree = []
 
