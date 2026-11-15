@@ -1,0 +1,33 @@
+# Residue templates for the OpenMM cross-check (tests/openmm_reference.rs and
+# validation/openmm_chain_reference.py). Atom types come from the synthetic test
+# parameters in data/synthetic-test.toml. These are not a published force field.
+#
+# RSA: four-atom backbone-like unit. The C-O bond is bent and the N-CA bond is
+# not along +x, so links to the next residue are not collinear (see ffparams).
+# LIP: six-atom unit standing in for a lipid tail.
+
+[[molecule]]
+name = "RSA"
+atoms = [
+  { name = "N",  type = "CT", charge = 0.0, position = [0.0,  0.0, 0.0] },
+  { name = "CA", type = "CT", charge = 0.0, position = [0.12, 0.10, 0.0] },
+  { name = "C",  type = "CT", charge = 0.0, position = [0.25, 0.10, 0.0] },
+  { name = "O",  type = "CT", charge = 0.0, position = [0.38, 0.00, 0.0] },
+]
+bonds = [[0, 1], [1, 2], [2, 3]]
+head = 0
+tail = 3
+
+[[molecule]]
+name = "LIP"
+atoms = [
+  { name = "C1", type = "CT", charge = 0.0, position = [0.00, 0.00, 0.0] },
+  { name = "C2", type = "CT", charge = 0.0, position = [0.13, 0.05, 0.0] },
+  { name = "C3", type = "CT", charge = 0.0, position = [0.26, 0.00, 0.0] },
+  { name = "C4", type = "CT", charge = 0.0, position = [0.39, 0.05, 0.0] },
+  { name = "C5", type = "CT", charge = 0.0, position = [0.52, 0.00, 0.0] },
+  { name = "C6", type = "CT", charge = 0.0, position = [0.65, 0.05, 0.0] },
+]
+bonds = [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5]]
+head = 0
+tail = 5

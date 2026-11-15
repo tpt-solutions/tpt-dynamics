@@ -58,3 +58,43 @@ What is and is not established:
 - Supporting real biomolecules needs a parameter set chosen and supplied by the
   user (none is bundled, per the policy above) and a reference to validate it
   against.
+
+## Parameter-set recommendation (2026-11-16)
+
+Recommended target: the AMBER family, **ff14SB** for proteins, **OL15** for DNA,
+**OL3** for RNA and **lipid17** for lipids. It covers all three kinds of molecule
+with one family, and OpenMM ships the same parameters as XML, so an independent
+reference is available locally.
+
+Licence status, as far as it could be checked from the sources found:
+
+- A 2023 J. Chem. Inf. Model. paper on AmberTools states that the Amber force
+  fields are in the public domain and are distributed with AmberTools. This is
+  a secondary source about the family as a class, not a per-file licence. The
+  search results reported it from AmberTools' own licence pages on ambermd.org.
+  The header of each file must be checked before any file is bundled.
+- No licence was verified for CHARMM36 (the forum thread and the
+  Mackerell-lab notes describe informal permission, not a licence), GROMOS 54A7
+  or OPLS-AA. These are not recommended as the first target.
+
+Policy stays as before until the file-level check is done: no parameter data is
+bundled. Users obtain the files from the source and point the converter at them.
+
+## OpenMM cross-check
+
+`validation/openmm_chain_reference.py` builds residue chains with its own
+geometry and topology code and evaluates them with OpenMM 8.6 (Reference
+platform). `tests/openmm_reference.rs` rebuilds the same chains with
+`assemble_chains` and checks:
+
+- positions agree to 1e-12 nm;
+- the total potential agrees to 1e-9 relative, for a five-residue chain of four
+  carbon residues, a three-residue chain of six-carbon units, and a mixed chain.
+
+Scope: this uses the synthetic test parameters, so it checks the implementation
+(bonds, angles, proper dihedrals, exclusions, 1-4 scaling, Lennard-Jones mixing,
+cutoff without shift). It does not check any parameter set. The test was checked
+for sensitivity: a 1 kJ/mol change in the reference makes it fail.
+
+Not yet covered: forces (only energies are compared), electrostatics, impropers,
+Urey-Bradley terms, and periodic images.
