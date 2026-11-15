@@ -1,0 +1,22 @@
+[package]
+name = "tpt-dynamics-core"
+description = "Physical constants, unit conversions and vector math for tpt-dynamics (no_std)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+readme = "README.md"
+publish = true
+
+[features]
+default = []
+# Enables std-only conveniences (currently: `std::error::Error` impls).
+std = []
+
+[dependencies]
+libm.workspace = true
+
+[lints]
+workspace = true
