@@ -239,3 +239,110 @@ fn arrow_ipc_random_and_mutated_inputs_never_panic() {
         let _ = arrow_ipc::read_all(&data);
     }
 }
+
+/// Parquet import (feature `parquet`): random, truncated and mutated inputs must
+/// produce `Ok` or `Err`, never a panic. Seeds are the committed fixtures.
+#[cfg(feature = "parquet")]
+mod parquet_targets {
+    use super::*;
+    use tpt_dynamics_data::parquet::ParquetFile;
+
+    fn seeds() -> Vec<Vec<u8>> {
+        ["flat_snappy_plain.parquet", "flat_gzip_dict.parquet", "flat_none_dict.parquet"]
+            .iter()
+            .map(|name| {
+                let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                    .join("tests/fixtures/parquet")
+                    .join(name);
+                std::fs::read(path).unwrap()
+            })
+            .collect()
+    }
+
+    fn decode(data: &[u8]) {
+        if let Ok(mut f) = ParquetFile::open(std::io::Cursor::new(data.to_vec())) {
+            let _ = f.read_frame(None);
+        }
+    }
+
+    #[test]
+    fn parquet_random_inputs_never_panic() {
+        let mut rng = SplitMix64::new(0x9A4B_0001);
+        let alphabet = b"PAR1\x00\x01\x02\xff";
+        for _ in 0..iters() {
+            decode(&random_input(&mut rng, alphabet, 512));
+        }
+    }
+
+    #[test]
+    fn parquet_truncations_and_mutations_never_panic() {
+        let mut rng = SplitMix64::new(0x9A4B_0002);
+        for valid in seeds() {
+            for n in 0..valid.len() {
+                decode(&valid[..n]);
+            }
+            for _ in 0..iters() / 4 {
+                decode(&mutate(&mut rng, &valid));
+            }
+        }
+    }
+}
+
+/// Chunked trajectory format: random, truncated and mutated inputs must be
+/// rejected or decoded without a panic, including random frame access.
+mod trajectory_targets {
+    use super::*;
+    use tpt_dynamics_data::trajectory::{Frame, FrameSink, Precision, TrajectoryReader, TrajectoryWriter};
+
+    fn valid_trajectory() -> Vec<u8> {
+        let mut w = TrajectoryWriter::new(Vec::new(), 3, Precision::F32, 4).unwrap();
+        for step in 0..10u64 {
+            let f = Frame {
+                step,
+                time: 0.002 * step as f64,
+                box_lengths: [3.0, 3.0, 3.0],
+                positions: vec![[0.1 * step as f64, 0.0, 0.0], [1.0, 1.0, 1.0], [2.0, 0.5, 0.25]],
+            };
+            w.push_frame(&f).unwrap();
+        }
+        w.finish().unwrap()
+    }
+
+    fn decode(data: &[u8], rng: &mut SplitMix64) {
+        let Ok(mut r) = TrajectoryReader::open(std::io::Cursor::new(data.to_vec())) else {
+            return;
+        };
+        // Bounded: a corrupt header must not be able to stall the test.
+        for item in r.frames().take(64) {
+            let _ = item;
+        }
+        let n = r.n_frames();
+        for _ in 0..4 {
+            let i = rng.below(n + 2);
+            let _ = r.frame(i);
+        }
+    }
+
+    #[test]
+    fn trajectory_random_inputs_never_panic() {
+        let mut rng = SplitMix64::new(0x7A7_0001);
+        let alphabet = b"TRJ\x01\x00\x00\x00\xff";
+        for _ in 0..iters() {
+            let data = random_input(&mut rng, alphabet, 512);
+            decode(&data, &mut rng);
+        }
+    }
+
+    #[test]
+    fn trajectory_truncations_and_mutations_never_panic() {
+        let mut rng = SplitMix64::new(0x7A7_0002);
+        let valid = valid_trajectory();
+        for n in 0..valid.len() {
+            decode(&valid[..n], &mut rng);
+        }
+        for _ in 0..iters() {
+            let data = mutate(&mut rng, &valid);
+            decode(&data, &mut rng);
+        }
+    }
+}
