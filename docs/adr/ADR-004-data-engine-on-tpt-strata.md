@@ -15,7 +15,7 @@ Build the data engine on `tpt-strata` (`tpt-strata` 0.1.0 has no dependencies).
 `tpt-strata-parquet` is **not** adopted: it depends on `arrow` and `parquet`, which
 are Apache-2.0 only. Parquet support, if needed, must come from an own reader or
 be placed behind a feature that is excluded from the default build and
-documented in ADR-005.
+documented in ADR-005. **Update:** the own read-only reader is ADR-008.
 
 ## Consequences
 

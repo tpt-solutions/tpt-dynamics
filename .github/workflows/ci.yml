@@ -60,6 +60,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo test --workspace
+      - run: cargo test -p tpt-dynamics-data --features parquet
 
   doc:
     name: rustdoc

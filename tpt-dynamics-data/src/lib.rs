@@ -12,8 +12,8 @@
 //! * [`json`], [`crc32`], [`rng`]: dependency-free building blocks used by the
 //!   modules above.
 //!
-//! Not yet implemented: lazy data frames, fill-from-frame aggregation, Parquet
-//! (blocked on the Phase 0 licence decision). See `todo.md` for the plan.
+//! * [`parquet`] (feature `parquet`): read-only Parquet import, clean-room, with no
+//!   Arrow or Parquet crates (ADR-008). Writing Parquet is not planned. See `todo.md` for the plan.
 #![forbid(unsafe_code)]
 
 pub mod arrow_ipc;
@@ -25,6 +25,8 @@ pub mod hist2d;
 pub mod jagged;
 pub mod json;
 pub mod lazy;
+#[cfg(feature = "parquet")]
+pub mod parquet;
 pub mod physics;
 pub mod profile;
 pub mod rng;
