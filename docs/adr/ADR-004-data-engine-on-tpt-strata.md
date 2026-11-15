@@ -1,6 +1,6 @@
 # ADR-004: Build the data engine on tpt-strata (no polars or arrow)
 
-- **Status:** Accepted (adoption pending; see `todo.md` Phase 1)
+- **Status:** Superseded by ADR-009 (the data engine stays in-house; tpt-strata is not adopted)
 - **Date:** 2026-11-16
 
 ## Context
