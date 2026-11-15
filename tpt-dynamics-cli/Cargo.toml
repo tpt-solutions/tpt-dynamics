@@ -1,0 +1,32 @@
+[package]
+name = "tpt-dynamics-cli"
+description = "The tptdyn command-line tool: simulate, analyze, histogram, completions and man pages."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+readme = "README.md"
+publish = true
+
+[[bin]]
+name = "tptdyn"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4.6.7", features = ["derive"] }
+clap_complete = "4.6.11"
+clap_mangen = "0.3.3"
+log = "0.4.35"
+rayon = "1"
+serde = { version = "1.0.229", features = ["derive"] }
+toml = "1.2.1"
+tpt-dynamics-core = { version = "0.1.0-dev", path = "../tpt-dynamics-core" }
+tpt-dynamics-data = { version = "0.1.0-dev", path = "../tpt-dynamics-data" }
+tpt-dynamics-sim = { version = "0.1.0-dev", path = "../tpt-dynamics-sim" }
+
+[lints]
+workspace = true
+
+[dev-dependencies]
