@@ -53,45 +53,129 @@ pub(crate) fn run(args: &AnalyzeArgs, quiet: bool) -> Result<(), CliError> {
     let filters = args.filters.iter().map(|f| parse_filter(f)).collect::<Result<Vec<_>, _>>()?;
     let hists = args.hists.iter().map(|h| parse_hist_spec(h)).collect::<Result<Vec<_>, _>>()?;
 
-    let (loaded, total_rows) = load(args, delimiter)?;
-    let frame = apply_filters(loaded, &filters)?;
-    print_summary(&frame, total_rows, quiet);
+    let path = args.input.as_deref().ok_or_else(|| usage("analyze needs INPUT.csv"))?;
+    let mut reader = open_csv(path, delimiter, !args.no_header)?;
+    // Without a header, column names are `c0, c1, ...`, taken from the first chunk.
+    let mut names: Vec<String> = reader.header().map(<[String]>::to_vec).unwrap_or_default();
+    let mut hist_objs = hists
+        .iter()
+        .map(|(column, bins, lo, hi)| {
+            let hist = Histogram1D::uniform(*bins, *lo, *hi)
+                .map_err(|e| usage(format!("invalid --hist for '{column}': {e}")))?;
+            Ok((column.clone(), hist))
+        })
+        .collect::<Result<Vec<_>, CliError>>()?;
 
-    if !hists.is_empty() {
+    // Stream the file in chunks: memory is bounded by CHUNK_ROWS, not by the file size.
+    // Each chunk is filtered, then folded into the summary and the histograms.
+    let mut summary = Summary::default();
+    let mut total_rows = 0usize;
+    loop {
+        let records: Vec<CsvRecord> =
+            reader.by_ref().take(CHUNK_ROWS).collect::<Result<_, _>>().map_err(|e| csv_err(&e))?;
+        if records.is_empty() {
+            break;
+        }
+        if names.is_empty() {
+            names = (0..records[0].len()).map(|i| format!("c{i}")).collect();
+        }
+        total_rows += records.len();
+        let frame = apply_filters(frame_from_records(&names, &records)?, &filters)?;
+        summary.add(&frame);
+        for (column, hist) in &mut hist_objs {
+            for x in column_f64(&frame, column)? {
+                hist.fill(x);
+            }
+        }
+    }
+    print_summary(&summary, total_rows, quiet);
+
+    if let Some((column, _)) = hist_objs.iter().find(|(c, _)| !names.contains(c)) {
+        return Err(input(format!("no column named '{column}' in the input")));
+    }
+    if !hist_objs.is_empty() {
         fs::create_dir_all(&args.out_dir)
             .map_err(|e| runtime(format!("cannot create '{}': {e}", args.out_dir.display())))?;
     }
     let ext = if args.format == Format::Bin { "bin" } else { "json" };
-    for (column, bins, lo, hi) in &hists {
-        let mut hist = Histogram1D::uniform(*bins, *lo, *hi)
-            .map_err(|e| usage(format!("invalid --hist for '{column}': {e}")))?;
-        for x in column_f64(&frame, column)? {
-            hist.fill(x);
-        }
+    for (column, hist) in &hist_objs {
         let path = args.out_dir.join(format!("{}.{ext}", sanitise(column)));
-        write_histogram(&hist, &path, args.format)?;
+        write_histogram(hist, &path, args.format)?;
         log::info!("histogram of '{column}' written to {}", path.display());
     }
     Ok(())
 }
 
-/// Reads the whole CSV into a typed frame and returns it with the number of
-/// rows read. Every column must be numeric: a column whose fields all parse as
-/// integers becomes `i64`, otherwise `f64`.
-fn load(args: &AnalyzeArgs, delimiter: u8) -> Result<(DataFrame, usize), CliError> {
-    let path = args.input.as_deref().ok_or_else(|| usage("analyze needs INPUT.csv"))?;
-    let reader = open_csv(path, delimiter, !args.no_header)?;
-    let header: Option<Vec<String>> = reader.header().map(<[String]>::to_vec);
-    let records: Vec<CsvRecord> = reader.collect::<Result<_, _>>().map_err(|e| csv_err(&e))?;
-    let ncols = match (&header, records.first()) {
-        (Some(h), _) => h.len(),
-        (None, Some(r)) => r.len(),
-        (None, None) => 0,
-    };
-    let names: Vec<String> =
-        header.unwrap_or_else(|| (0..ncols).map(|i| format!("c{i}")).collect());
-    let mut columns = Vec::with_capacity(ncols);
-    for (i, name) in names.into_iter().enumerate() {
+/// Rows per chunk when streaming a CSV file.
+const CHUNK_ROWS: usize = 1 << 20;
+
+/// Per-column statistics over every filtered row seen so far.
+#[derive(Default)]
+struct Summary {
+    rows: usize,
+    columns: Vec<(String, DType, RunningStats)>,
+}
+
+impl Summary {
+    /// Folds one filtered chunk into the summary. A column that is `i64` in some
+    /// chunks and `f64` in others is reported as `f64`.
+    fn add(&mut self, frame: &DataFrame) {
+        self.rows += frame.len();
+        for name in frame.names() {
+            let Some(c) = frame.column(name) else { continue };
+            let idx = if let Some(i) = self.columns.iter().position(|(n, _, _)| n == name) {
+                i
+            } else {
+                self.columns.push((name.clone(), c.dtype(), RunningStats::new()));
+                self.columns.len() - 1
+            };
+            let entry = &mut self.columns[idx];
+            if entry.1 != c.dtype() {
+                entry.1 = DType::F64;
+            }
+            let stats = &mut entry.2;
+            match c {
+                Column::F64(v) => stats.push_all(v.iter().copied()),
+                Column::I64(v) => stats.push_all(v.iter().map(|&x| x as f64)),
+                Column::Bool(_) => {}
+            }
+        }
+    }
+}
+
+/// Welford running mean and variance, with min and max.
+#[derive(Clone, Copy)]
+struct RunningStats {
+    n: u64,
+    mean: f64,
+    m2: f64,
+    min: f64,
+    max: f64,
+}
+
+impl RunningStats {
+    fn new() -> Self {
+        Self { n: 0, mean: 0.0, m2: 0.0, min: f64::INFINITY, max: f64::NEG_INFINITY }
+    }
+
+    fn push_all(&mut self, values: impl Iterator<Item = f64>) {
+        for x in values {
+            self.n += 1;
+            let delta = x - self.mean;
+            self.mean += delta / self.n as f64;
+            self.m2 += delta * (x - self.mean);
+            self.min = self.min.min(x);
+            self.max = self.max.max(x);
+        }
+    }
+}
+
+/// Builds a typed frame from one chunk of records. Every column must be numeric:
+/// a column whose fields all parse as integers in this chunk becomes `i64`,
+/// otherwise `f64`.
+fn frame_from_records(names: &[String], records: &[CsvRecord]) -> Result<DataFrame, CliError> {
+    let mut columns = Vec::with_capacity(names.len());
+    for (i, name) in names.iter().enumerate() {
         let ints: Result<Vec<i64>, _> = records.iter().map(|r| r.i64(i)).collect();
         let column = if let Ok(v) = ints {
             Column::I64(v)
@@ -100,12 +184,10 @@ fn load(args: &AnalyzeArgs, delimiter: u8) -> Result<(DataFrame, usize), CliErro
             let v = floats.map_err(|e| input(format!("column '{name}' is not numeric: {e}")))?;
             Column::F64(v)
         };
-        columns.push((name, column));
+        columns.push((name.clone(), column));
     }
-    let n = records.len();
-    let frame =
-        DataFrame::with_rows(n, columns).map_err(|e| input(format!("cannot build table: {e}")))?;
-    Ok((frame, n))
+    DataFrame::with_rows(records.len(), columns)
+        .map_err(|e| input(format!("cannot build table: {e}")))
 }
 
 /// Keeps the rows that satisfy every filter (logical AND), using the lazy
@@ -200,41 +282,32 @@ fn sanitise(name: &str) -> String {
 }
 
 /// Prints the row counts and a per-column table to stdout.
-fn print_summary(frame: &DataFrame, total: usize, quiet: bool) {
+fn print_summary(summary: &Summary, total: usize, quiet: bool) {
     if quiet {
         return;
     }
-    println!("rows: {} (of {total} read)", frame.len());
+    println!("rows: {} (of {total} read)", summary.rows);
     println!(
         "{:<20} {:>5} {:>14} {:>14} {:>14} {:>14}",
         "column", "type", "min", "max", "mean", "stddev"
     );
-    for name in frame.names() {
-        let Some(c) = frame.column(name) else { continue };
-        let values = match c {
-            Column::F64(v) => v.clone(),
-            Column::I64(v) => v.iter().map(|&x| x as f64).collect(),
-            Column::Bool(_) => continue,
-        };
-        let (min, max, mean, sd) = stats(&values);
-        println!("{:<20} {:>5} {:>14} {:>14} {:>14} {:>14}", name, c.dtype(), min, max, mean, sd);
+    for (name, dtype, stats) in &summary.columns {
+        let (min, max, mean, sd) = stats.formatted();
+        println!("{name:<20} {dtype:>5} {min:>14} {max:>14} {mean:>14} {sd:>14}");
     }
 }
 
-/// Min, max, mean and population standard deviation, formatted; `-` when empty.
-fn stats(values: &[f64]) -> (String, String, String, String) {
-    if values.is_empty() {
-        return ("-".into(), "-".into(), "-".into(), "-".into());
+impl RunningStats {
+    /// Min, max, mean and population standard deviation, formatted; `-` when empty.
+    fn formatted(&self) -> (String, String, String, String) {
+        if self.n == 0 {
+            return ("-".into(), "-".into(), "-".into(), "-".into());
+        }
+        (
+            format!("{:.6e}", self.min),
+            format!("{:.6e}", self.max),
+            format!("{:.6e}", self.mean),
+            format!("{:.6e}", (self.m2 / self.n as f64).sqrt()),
+        )
     }
-    let n = values.len() as f64;
-    let min = values.iter().copied().fold(f64::INFINITY, f64::min);
-    let max = values.iter().copied().fold(f64::NEG_INFINITY, f64::max);
-    let mean = values.iter().sum::<f64>() / n;
-    let var = values.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / n;
-    (
-        format!("{min:.6e}"),
-        format!("{max:.6e}"),
-        format!("{mean:.6e}"),
-        format!("{:.6e}", var.sqrt()),
-    )
 }
