@@ -1,0 +1,50 @@
+[workspace]
+resolver = "2"
+members = [
+    "tpt-dynamics-core",
+    "tpt-dynamics-data",
+    "tpt-dynamics-sim",
+    "tpt-dynamics-compute",
+    "tpt-dynamics-cli",
+    "bindings/tpt-dynamics-py",
+]
+
+[workspace.package]
+version = "0.1.0-dev"
+edition = "2021"
+# Declared MSRV. Verified by the CI MSRV job (see .github/workflows/ci.yml).
+rust-version = "1.95"
+license = "MIT OR Apache-2.0"
+authors = ["TPT Solutions"]
+repository = "https://github.com/tpt-solutions/tpt-dynamics"
+
+[workspace.dependencies]
+libm = "0.2"
+
+# MIT replacement for the upstream `target-lexicon` (Apache-2.0 WITH LLVM-exception),
+# which PyO3's build configuration depends on. Local path for now; switch to a
+# git `rev` once the crate is pushed to github.com/tpt-solutions.
+[patch.crates-io]
+target-lexicon = { path = "../target-lexicon-mit" }
+
+[workspace.lints.rust]
+# Unsafe code is forbidden by default. Any exception must be documented in an ADR
+# and carry a local `#[allow(unsafe_code)]` with a justification comment.
+unsafe_code = "forbid"
+missing_docs = "warn"
+unreachable_pub = "warn"
+
+[workspace.lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+# Pedantic lints that are too noisy for numerical code.
+cast_precision_loss = "allow"
+cast_possible_truncation = "allow"
+cast_sign_loss = "allow"
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
