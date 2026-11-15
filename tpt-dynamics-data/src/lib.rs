@@ -30,6 +30,7 @@ pub mod parquet;
 pub mod physics;
 pub mod profile;
 pub mod rng;
+pub mod rowstore;
 pub mod serialise;
 pub mod trajectory;
 

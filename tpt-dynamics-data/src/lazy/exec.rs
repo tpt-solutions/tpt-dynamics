@@ -112,24 +112,37 @@ impl Stream<'_> {
     }
 }
 
+/// Runs the aggregate at the root of `plan` and returns its unfinalised group
+/// states. Distributed workers use this so the coordinator can merge them.
+pub(crate) fn partial(plan: &Plan, opts: &CollectOptions) -> Result<Partial, LazyError> {
+    let Plan::Aggregate { input, keys, aggs } = plan else {
+        return Err(LazyError::Invalid("partial execution needs an aggregate at the root".into()));
+    };
+    validate(plan)?;
+    if opts.chunk_size == 0 || opts.window == 0 {
+        return Err(LazyError::Invalid("chunk_size and window must both be at least 1".into()));
+    }
+    let mut groups = Partial::new();
+    if let Some(stream) = streamable(input) {
+        stream.for_each_chunk(
+            opts,
+            |df| partial_agg(&df, keys, aggs),
+            |p| {
+                merge(&mut groups, p);
+                Ok(())
+            },
+        )?;
+    } else {
+        let df = exec_node(input, opts)?;
+        merge(&mut groups, partial_agg(&df, keys, aggs)?);
+    }
+    Ok(groups)
+}
+
 fn exec_node(plan: &Plan, opts: &CollectOptions) -> Result<DataFrame, LazyError> {
-    if let Plan::Aggregate { input, keys, aggs } = plan {
+    if let Plan::Aggregate { .. } = plan {
         let schema = validate(plan)?;
-        let mut groups = Partial::new();
-        if let Some(stream) = streamable(input) {
-            stream.for_each_chunk(
-                opts,
-                |df| partial_agg(&df, keys, aggs),
-                |p| {
-                    merge(&mut groups, p);
-                    Ok(())
-                },
-            )?;
-        } else {
-            let df = exec_node(input, opts)?;
-            merge(&mut groups, partial_agg(&df, keys, aggs)?);
-        }
-        return finalize(groups, &schema);
+        return finalize(partial(plan, opts)?, &schema);
     }
 
     if let Some(stream) = streamable(plan) {
@@ -192,7 +205,7 @@ fn apply_op(op: &Plan, df: DataFrame) -> Result<DataFrame, LazyError> {
 
 /// Group key element. Ordering gives a deterministic output order.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-enum KeyVal {
+pub(crate) enum KeyVal {
     I64(i64),
     Bool(bool),
 }
@@ -209,7 +222,7 @@ fn key_at(col: &Column, row: usize) -> KeyVal {
 /// Running state of one aggregate within one group. Partial states merge
 /// associatively.
 #[derive(Clone, Copy, Debug)]
-enum Acc {
+pub(crate) enum Acc {
     Count(i64),
     SumI(i64),
     SumF(f64),
@@ -304,7 +317,7 @@ impl Acc {
     }
 }
 
-type Partial = HashMap<Vec<KeyVal>, Vec<Acc>>;
+pub(crate) type Partial = HashMap<Vec<KeyVal>, Vec<Acc>>;
 
 fn partial_agg(df: &DataFrame, keys: &[String], aggs: &[AggExpr]) -> Result<Partial, LazyError> {
     let key_cols = keys
@@ -328,7 +341,7 @@ fn partial_agg(df: &DataFrame, keys: &[String], aggs: &[AggExpr]) -> Result<Part
     Ok(map)
 }
 
-fn merge(into: &mut Partial, part: Partial) {
+pub(crate) fn merge(into: &mut Partial, part: Partial) {
     for (key, accs) in part {
         match into.entry(key) {
             Entry::Occupied(mut e) => {
@@ -361,7 +374,7 @@ fn push_acc(col: &mut Column, acc: &Acc) -> Result<(), LazyError> {
     Ok(())
 }
 
-fn finalize(groups: Partial, schema: &Schema) -> Result<DataFrame, LazyError> {
+pub(crate) fn finalize(groups: Partial, schema: &Schema) -> Result<DataFrame, LazyError> {
     let mut entries: Vec<(Vec<KeyVal>, Vec<Acc>)> = groups.into_iter().collect();
     entries.sort_by(|a, b| a.0.cmp(&b.0));
     let mut cols: Vec<Column> = schema.iter().map(|f| Column::empty(f.dtype)).collect();
@@ -379,7 +392,7 @@ fn finalize(groups: Partial, schema: &Schema) -> Result<DataFrame, LazyError> {
     )
 }
 
-fn concat(schema: &Schema, parts: &[DataFrame]) -> Result<DataFrame, LazyError> {
+pub(crate) fn concat(schema: &Schema, parts: &[DataFrame]) -> Result<DataFrame, LazyError> {
     let mut cols: Vec<Column> = schema.iter().map(|f| Column::empty(f.dtype)).collect();
     let mut rows = 0;
     for part in parts {

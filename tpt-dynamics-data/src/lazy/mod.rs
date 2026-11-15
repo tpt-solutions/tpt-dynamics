@@ -23,6 +23,7 @@
 //! assert_eq!(out.len(), 1);
 //! ```
 
+pub mod distributed;
 mod exec;
 mod expr;
 mod fill;
@@ -33,6 +34,7 @@ mod plan;
 #[cfg(test)]
 mod tests;
 
+pub use distributed::{DistributedPlan, Stage};
 pub use exec::CollectOptions;
 pub use expr::{
     col, delta_r, invariant_mass, lit, transverse_momentum, BinOp, Expr, Func, Scalar, UnOp,

@@ -97,6 +97,11 @@ pub struct AggExpr {
 }
 
 impl AggExpr {
+    /// Builds an aggregate from its parts. Used when decoding a shipped plan.
+    pub(crate) fn from_parts(kind: AggKind, input: Option<Expr>, name: String) -> Self {
+        Self { kind, input, name }
+    }
+
     /// Number of rows per group.
     pub fn count() -> Self {
         Self { kind: AggKind::Count, input: None, name: "count".into() }
