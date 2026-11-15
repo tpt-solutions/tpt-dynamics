@@ -111,7 +111,7 @@ Legend: `- [ ]` todo · `- [x]` done · **bold** = milestone
 - [x] Fuzz tests for all parsers
 
 ### Benchmarks
-- [ ] Generate synthetic collision-event dataset (10 GB CSV)
+- [x] Generate synthetic collision-event dataset (10 GB CSV): 10.49 GB, measured in `docs/benchmarks/large-data.md`
 - [ ] Benchmark harness (criterion) + baseline PyROOT/RDataFrame comparison script
 - [x] Record results in `docs/benchmarks/`
 
@@ -149,7 +149,7 @@ Legend: `- [ ]` todo · `- [x]` done · **bold** = milestone
 - [x] Trajectory writer hook (plain binary initially)
 - [x] Energy/log output
 
-- [ ] **Milestone: `tptdyn simulate` runs a stable 10,000-atom Lennard-Jones fluid**
+- [x] **Milestone: `tptdyn simulate` runs a stable 10,000-atom Lennard-Jones fluid** (5000 steps, relative energy drift 1.98e-6)
 
 ---
 
@@ -184,7 +184,7 @@ Legend: `- [ ]` todo · `- [x]` done · **bold** = milestone
 - [x] Reproducibility tests: decomposed vs single-domain results
 
 ### Scaling
-- [ ] 1M-atom benchmark system
+- [x] 1M-atom benchmark system (`docs/benchmarks/scaling-raw.txt`)
 - [ ] Strong/weak scaling benchmarks up to 32+ cores
 - [ ] Profile and remove bottlenecks (memory bandwidth, false sharing)
 
@@ -258,7 +258,7 @@ Legend: `- [ ]` todo · `- [x]` done · **bold** = milestone
 - [x] Radius of gyration
 - [x] Hydrogen-bond counts
 - [x] Radial distribution function
-- [ ] Memory-bound tests on multi-GB trajectories
+- [x] Memory-bound tests on multi-GB trajectories (2.9 GB file analysed in 97 MB peak; CI test `trajectory_memory.rs`)
 - [x] `tptdyn analyze` support for trajectories
 
 ---
@@ -269,7 +269,7 @@ Legend: `- [ ]` todo · `- [x]` done · **bold** = milestone
 - [ ] ROOT TTree/file reader (clean-room)
 - [x] Arrow-IPC-style columnar reader (own implementation, no `arrow` crate)
 - [x] Jagged-array operations for per-event particle collections
-- [ ] Distributed execution of lazy plans across nodes
+- [x] Distributed execution of lazy plans across nodes (`lazy::distributed`; verified over loopback TCP, not yet across separate machines)
 - [x] Histogram merging across nodes
 - [x] Python histogram interop (boost-histogram/hist-style API)
 - [ ] Network/object-store data sources

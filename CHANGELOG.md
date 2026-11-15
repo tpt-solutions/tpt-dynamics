@@ -42,6 +42,14 @@ the project uses [Semantic Versioning](https://semver.org/) once it reaches 0.1.
 - `LazyFrame::fill_histogram`: fills a `Histogram1D` from a lazy plan, optionally weighted.
 - `parquet` feature (off by default): read-only Parquet import with an own reader, for flat schemas, SNAPPY/GZIP/uncompressed codecs and dictionary encoding (ADR-008).
 
+### Added (large data and distributed execution, unreleased)
+
+- `tptdyn analyze` streams the CSV in chunks of 1,048,576 rows. Memory no longer grows with the file: a 10.49 GB file peaks at 554 MB. Column statistics are running (Welford) values; a column that is integer in some chunks and fractional in others is reported as `f64`.
+- `lazy::distributed`: a coordinator splits a source's rows across TCP workers, which run the row-wise stages and return partial aggregates or rows. Results are merged in worker order. Plans are `DistributedPlan` (filter, select, with-column, group-by aggregate). The protocol has no authentication, so run workers only on a trusted network.
+- `rowstore`: a fixed-width binary column file that serves any row range with one seek per column. It implements `lazy::Source`.
+- `examples/generate_trajectory.rs`: writes a synthetic trajectory one frame at a time.
+- Measurements and reproduction commands are in `docs/benchmarks/large-data.md`.
+
 ### Known issues
 
 - None open on licences: `target-lexicon` is replaced by the MIT-licensed `target-lexicon-mit` via `[patch.crates-io]`, and the LLVM-exception allowance is removed (ADR-005 amendment, later 2026-11-16).
