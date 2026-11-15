@@ -1,0 +1,21 @@
+[ defaults ]
+; nbfunc comb-rule gen-pairs
+1 1 no
+
+[ atomtypes ]
+; name mass charge ptype sigma epsilon
+AR 1.0 0.0 A 1.0 1.0
+
+[ moleculetype ]
+; name nrexcl
+AR 1
+
+[ atoms ]
+; nr type resnr resname atom cgnr charge mass
+1 AR 1 AR AR 1 0.0 1.0
+
+[ system ]
+LJ fluid
+
+[ molecules ]
+AR 10000

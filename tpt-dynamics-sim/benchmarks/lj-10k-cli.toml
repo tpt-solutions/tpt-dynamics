@@ -1,0 +1,33 @@
+# Phase 2 milestone check: a 10,000-atom Lennard-Jones run through `tptdyn simulate`.
+#
+# The starting structure is benchmarks/lj-10k.gro, written by
+#   cargo run --release -p tpt-dynamics-sim --example gen_lj_system -- 20 20 25 tpt-dynamics-sim/benchmarks/lj-10k.gro
+# (simple cubic 20 x 20 x 25 = 10,000 atoms at reduced density 0.8442, T* = 0.72).
+#
+# Run from the repository root:
+#   cargo run --release -p tpt-dynamics-cli -- simulate tpt-dynamics-sim/benchmarks/lj-10k-cli.toml --output-dir <dir>
+#
+# Reduced Lennard-Jones units (sigma = epsilon = m = 1); the GRO file stores them as nm.
+
+units = "reduced"
+seed = 1
+dt = 0.004
+nsteps = 5000
+temperature = 0.72
+integrator = "velocity-verlet"
+
+[system]
+structure = "lj-10k.gro"
+
+[neighbour]
+cutoff = 2.5
+skin = 0.3
+
+[lennard_jones]
+epsilon = 1.0
+sigma = 1.0
+modifier = "shift"
+
+[output]
+energy_interval = 500
+energy_file = "lj-10k-energy.csv"

@@ -1,0 +1,35 @@
+# Benchmark configuration: synthetic 1,000,000-atom Lennard-Jones FCC fluid.
+#
+# STATUS: written as a reproducible target. It has NOT been run. Timing and
+# energy-drift results for this system are not reported anywhere in the crate.
+#
+# System (built the same way as examples/lj_fluid.rs, with CELLS = [100, 100, 25]
+# instead of [10, 10, 25]): FCC, 4 atoms per conventional cell, 1,000,000 atoms,
+# reduced density 0.8442, reduced temperature 0.72.
+#
+# Run: no 1M-atom system builder is wired to this file yet. The settings match
+# examples/lj_fluid.rs; change its CELLS constant to [100, 100, 25] to build the system.
+
+seed = 1
+units = "reduced"
+dt = 0.004
+nsteps = 1000
+temperature = 0.72
+integrator = "velocity-verlet"
+
+[neighbour]
+cutoff = 2.5
+skin = 0.3
+
+[lennard_jones]
+epsilon = 1.0
+sigma = 1.0
+modifier = "shift"
+
+[thermostat]
+kind = "berendsen"
+tau = 0.5
+
+[output]
+energy_interval = 100
+energy_file = "lj-1m-energy.csv"

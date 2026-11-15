@@ -1,0 +1,22 @@
+[package]
+name = "tpt-dynamics-sim"
+description = "Classical molecular dynamics engine for tpt-dynamics: system model, PDB/GRO I/O, neighbour lists, Lennard-Jones, integrators."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+readme = "README.md"
+publish = true
+
+[dependencies]
+rayon = "1"
+serde = { version = "1.0.229", features = ["derive"] }
+toml = "1.2.1"
+tpt-dynamics-core = { version = "0.1.0-dev", path = "../tpt-dynamics-core" }
+tpt-dynamics-compute = { version = "0.1.0-dev", path = "../tpt-dynamics-compute" }
+tpt-dynamics-data = { version = "0.1.0-dev", path = "../tpt-dynamics-data" }
+
+[lints]
+workspace = true
