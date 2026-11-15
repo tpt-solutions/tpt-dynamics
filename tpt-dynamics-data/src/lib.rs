@@ -22,6 +22,7 @@ pub mod crc32;
 pub mod csv;
 pub mod hist1d;
 pub mod hist2d;
+pub mod http;
 pub mod jagged;
 pub mod json;
 pub mod lazy;
