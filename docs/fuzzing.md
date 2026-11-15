@@ -1,9 +1,14 @@
 # Fuzzing
 
-Two layers exist. Both target the untrusted-input readers in `tpt-dynamics-data`
-(CSV, columnar, serialise/JSON, Arrow-IPC-style). Parsers in `tpt-dynamics-sim`
-(PDB, GRO, TOML) are not yet covered and are listed in
-`docs/audit/security-review.md`.
+Two layers exist. Both target the untrusted-input readers:
+
+- `tpt-dynamics-data`: CSV, columnar, serialise/JSON, Arrow-IPC-style, Parquet
+  (feature `parquet`), trajectory, row store, the distributed wire decoder,
+  the HTTP response parser, and a live worker receiving garbage over TCP.
+- `tpt-dynamics-sim`: PDB, GRO, the simulation config TOML, and the
+  force-field parameter TOML (`ffparams`).
+
+Section 4 records the long campaign runs.
 
 ## 1. Stable-toolchain randomised tests (run in CI)
 
@@ -78,3 +83,19 @@ Do not add it to the workspace `members` list.
 Nightly `-Zsanitizer=address` catches out-of-bounds reads in any code that uses
 `unsafe`. The workspace currently has none in hand-written code (see
 `docs/audit/unsafe-audit.md`), so sanitizers mainly add value for dependencies.
+
+## 4. Campaign runs (stable toolchain, release build)
+
+Each run uses the deterministic generators, so a failure reproduces from the same
+seed. Results from 16 November 2026 on the development machine:
+
+| Target | Command | Iterations | Result |
+|---|---|---|---|
+| Data-crate parsers | `FUZZ_ITERS=200000 cargo test -p tpt-dynamics-data --release --features parquet --test fuzz_parsers` | 200,000 per generator | 12 passed, no panics |
+| Network readers and live worker | `FUZZ_ITERS=20000 cargo test -p tpt-dynamics-data --release --test fuzz_network` | 20,000 | 4 passed, worker kept serving valid jobs |
+| Simulation PDB/GRO | `FUZZ_ITERS=200000 cargo test -p tpt-dynamics-sim --release --test fuzz_sim_parsers` | 200,000 | 5 passed |
+| Config and force-field TOML | `FUZZ_ITERS=200000 cargo test -p tpt-dynamics-sim --release --test fuzz_config` | 200,000 | 5 passed |
+
+No input caused a panic, hang, or unbounded allocation. The campaign did not
+find a defect, so no regression artifacts were added. Coverage-guided runs
+(section 2) are still the stronger check and need a nightly toolchain.

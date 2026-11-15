@@ -13,7 +13,10 @@ use tpt_dynamics_sim::solvate::place_water_grid;
 use tpt_dynamics_sim::system::System;
 use tpt_dynamics_sim::textio::ReadLimits;
 
-const ITERATIONS: usize = 4000;
+/// Iterations per test. Override with `FUZZ_ITERS`.
+fn iterations() -> usize {
+    std::env::var("FUZZ_ITERS").ok().and_then(|v| v.parse().ok()).unwrap_or(4000)
+}
 /// Characters used to overwrite one byte of a valid GRO file.
 const ALPHABET: &[u8] = b"0123456789-+. eEnaNi\n";
 
@@ -56,7 +59,7 @@ fn mutate(rng: &mut Rng, base: &[u8]) -> Vec<u8> {
 #[test]
 fn random_bytes_return_errors_and_never_panic() {
     let mut rng = Rng::seed_from_u64(0xF022_0001);
-    for i in 0..ITERATIONS {
+    for i in 0..iterations() {
         let bytes = random_bytes(&mut rng, 600);
         // Random bytes cannot form a valid structure with a box and atoms.
         assert!(read_pdb(&bytes[..]).is_err(), "PDB iteration {i} unexpectedly parsed");
@@ -69,7 +72,7 @@ fn mutated_valid_inputs_never_panic() {
     let (pdb_text, gro_text, n_atoms) = valid_inputs();
     let mut rng = Rng::seed_from_u64(0xF022_0002);
     let tight = ReadLimits { max_line_bytes: 60, max_atoms: 10 };
-    for _ in 0..ITERATIONS {
+    for _ in 0..iterations() {
         let p = mutate(&mut rng, &pdb_text);
         if let Ok(sys) = read_pdb(&p[..]) {
             assert!(sys.len() <= n_atoms.max(1) + p.len());
@@ -107,7 +110,7 @@ fn truncated_valid_inputs_never_panic_and_gro_truncation_is_an_error() {
 fn byte_flips_in_numeric_fields_are_rejected_or_parsed_without_panic() {
     let (_, gro_text, _) = valid_inputs();
     let mut rng = Rng::seed_from_u64(0xF022_0003);
-    for _ in 0..ITERATIONS {
+    for _ in 0..iterations() {
         let mut g = gro_text.clone();
         let at = (rng.next_u64() as usize) % g.len();
         // Replace one byte with a digit, sign, dot, letter or space.
