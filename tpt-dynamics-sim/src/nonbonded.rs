@@ -43,7 +43,9 @@ pub const COULOMB_FACTOR_MD: f64 = 138.935_458;
 /// Electrostatic treatment.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Electrostatics {
-    /// No Coulomb interaction.
+    /// No electrostatics: charges do not enter the energy or the forces,
+    /// including the scaled 1-4 Coulomb terms. Use [`Electrostatics::Pme`] to
+    /// include them.
     None,
     /// Ewald real space plus smooth PME reciprocal space.
     Pme {
@@ -271,7 +273,8 @@ impl ForceField for Nonbonded {
             let (v_lj, flj) = lj_pair(r2, sigma, eps);
             let mut e = self.settings.fudge_lj * v_lj;
             let mut f_over_r = self.settings.fudge_lj * flj;
-            let qq = self.settings.fudge_qq * f * charges[i] * charges[j];
+            // Without PME there is no electrostatics at all, 1-4 pairs included.
+            let qq = if pme { self.settings.fudge_qq * f * charges[i] * charges[j] } else { 0.0 };
             e += qq / r;
             f_over_r += qq / (r2 * r);
             let force = dr * f_over_r;
@@ -368,9 +371,33 @@ mod tests {
         )
         .unwrap();
         let (o, _) = eval(&ff, &pos, &q, &b, 0.1);
-        // LJ minimum depth scaled by fudge_lj, plus scaled Coulomb −0.8·0.16/r.
-        let expected = -0.5 + 0.8 * (-0.16) / r;
+        // Without PME there is no electrostatics, so only the LJ minimum scaled by
+        // fudge_lj remains. The charges do not enter.
+        let expected = -0.5;
         assert!((o.potential - expected).abs() < 1e-12, "{} vs {expected}", o.potential);
+    }
+
+    #[test]
+    fn no_electrostatics_ignores_charges_for_all_pairs() {
+        // Regression: charges used to act on 1-4 pairs but not on other pairs
+        // under `Electrostatics::None`, which made the total depend on topology.
+        let b = SimBox::new(10.0, 10.0, 10.0).unwrap();
+        let pos = [Vec3::new(1.0, 1.0, 1.0), Vec3::new(2.0, 1.0, 1.0), Vec3::new(1.0, 2.5, 1.0)];
+        let neutral = [0.0, 0.0, 0.0];
+        let charged = [0.4, -0.4, 0.3];
+        // Pair 0-1 is a 1-4 pair, pair 0-2 is an ordinary pair, pair 1-2 is excluded.
+        let make = || {
+            Nonbonded::new(
+                settings(Electrostatics::None, 3.0),
+                // Exclusion lists hold the 1-4 pair (0, 1) as well as the excluded (1, 2).
+                vec![vec![1], vec![0, 2], vec![1]],
+                vec![(0, 1)],
+            )
+            .unwrap()
+        };
+        let (a, _) = eval(&make(), &pos, &neutral, &b, 0.1);
+        let (c, _) = eval(&make(), &pos, &charged, &b, 0.1);
+        assert!((a.potential - c.potential).abs() < 1e-12, "{} vs {}", a.potential, c.potential);
     }
 
     #[test]
