@@ -34,6 +34,7 @@ const CUTOFF: f64 = 4.0;
 struct Reference {
     potential: f64,
     positions: Vec<Vec3>,
+    forces: Vec<Vec3>,
 }
 
 fn parse_fixture(text: &str) -> Reference {
@@ -49,15 +50,16 @@ fn parse_fixture(text: &str) -> Reference {
         .and_then(|l| l.strip_prefix("atoms "))
         .and_then(|v| v.trim().parse().ok())
         .expect("atoms line");
-    let positions: Vec<Vec3> = lines
-        .take(n)
-        .map(|l| {
-            let v: Vec<f64> = l.split_whitespace().map(|x| x.parse().expect("coordinate")).collect();
-            Vec3::new(v[0], v[1], v[2])
-        })
-        .collect();
+    let parse_vec = |l: &str| -> Vec3 {
+        let v: Vec<f64> = l.split_whitespace().map(|x| x.parse().expect("number")).collect();
+        Vec3::new(v[0], v[1], v[2])
+    };
+    let positions: Vec<Vec3> = lines.by_ref().take(n).map(parse_vec).collect();
     assert_eq!(positions.len(), n, "fixture has fewer positions than atoms");
-    Reference { potential, positions }
+    assert_eq!(lines.next(), Some("forces"), "missing forces header");
+    let forces: Vec<Vec3> = lines.by_ref().take(n).map(parse_vec).collect();
+    assert_eq!(forces.len(), n, "fixture has fewer forces than atoms");
+    Reference { potential, positions, forces }
 }
 
 fn params() -> ParamSet {
@@ -107,6 +109,18 @@ fn check_case(name: &str, residues: &[&str], fixture: &str) {
             &mut forces,
         )
         .potential;
+
+    // Forces, compared with the largest force as the scale.
+    let scale = reference.forces.iter().map(|f| f.norm()).fold(1.0_f64, f64::max);
+    let worst_force = forces
+        .iter()
+        .zip(&reference.forces)
+        .map(|(a, b)| (*a - *b).norm())
+        .fold(0.0_f64, f64::max);
+    assert!(
+        worst_force / scale < 1e-9,
+        "{name}: forces differ by {worst_force} (largest reference force {scale})"
+    );
 
     let relative = (ours - reference.potential).abs() / reference.potential.abs().max(1.0);
     assert!(

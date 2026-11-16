@@ -96,5 +96,20 @@ Scope: this uses the synthetic test parameters, so it checks the implementation
 cutoff without shift). It does not check any parameter set. The test was checked
 for sensitivity: a 1 kJ/mol change in the reference makes it fail.
 
-Not yet covered: forces (only energies are compared), electrostatics, impropers,
-Urey-Bradley terms, and periodic images.
+Forces are also compared (1e-9 relative to the largest force), so the gradients
+agree as well as the energies.
+
+Not yet covered: electrostatics, impropers, Urey-Bradley terms, and periodic images.
+
+### Licence check, second pass (2026-11-16)
+
+- The AMBER parameter files are distributed with AmberTools. The AmberTools
+  page says its components are mostly GPL, with some public-domain and other
+  open-source parts. It does not name a licence for the parameter files.
+- The AmberModels page gives no licence or redistribution terms for them.
+- The `openmmforcefields` repository is MIT licensed. That licence covers its
+  code, not the AMBER parameter data it converts.
+
+So the public-domain statement for the AMBER files is still secondary. It must be
+confirmed from the header or licence notice of the files the user obtains from
+AmberTools before anything is bundled.

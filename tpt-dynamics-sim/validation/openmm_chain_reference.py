@@ -17,6 +17,8 @@ positions, so the Rust test needs no extra dependency:
     components <bond> <angle> <torsion> <nonbonded>
     atoms <n>
     x y z           (one line per atom, nm)
+    forces          (header line)
+    fx fy fz        (one line per atom, kJ/mol/nm)
 
 Run from the repository root:
 
@@ -200,6 +202,8 @@ def energies(system, positions):
     out = {}
     total = context.getState(getEnergy=True).getPotentialEnergy()
     out["potential"] = total.value_in_unit(mm.unit.kilojoule_per_mole)
+    forces = context.getState(getForces=True).getForces(asNumpy=False)
+    out["forces"] = [(f.x, f.y, f.z) for f in forces]
     for name, group in (("bond", 0), ("angle", 1), ("torsion", 2), ("nonbonded", 3)):
         e = context.getState(getEnergy=True, groups={group}).getPotentialEnergy()
         out[name] = e.value_in_unit(mm.unit.kilojoule_per_mole)
@@ -214,6 +218,8 @@ def write_fixture(name, positions, e):
         f"atoms {len(positions)}",
     ]
     lines += [f"{x!r} {y!r} {z!r}" for x, y, z in positions]
+    lines.append("forces")
+    lines += [f"{x!r} {y!r} {z!r}" for x, y, z in e["forces"]]
     path = FIXTURES / f"{name}.txt"
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return path
