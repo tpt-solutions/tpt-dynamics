@@ -1,6 +1,6 @@
 # ADR-010: Converting user-supplied Amber parameters (proposed)
 
-- **Status:** Accepted for version 1. Bonds, angles, proper torsions and Lennard-Jones are implemented and checked against OpenMM. Impropers and electrostatics are pending (see "Version 1 result").
+- **Status:** Accepted for version 1. Bonds, angles, proper torsions, Lennard-Jones and electrostatics (PME) are implemented and checked against OpenMM. Impropers are pending (see "Version 1 result").
 - **Date:** 2026-11-16
 - **Related:** ADR-005 (licence policy), ADR-009, `docs/forcefield.md`
 
@@ -73,3 +73,15 @@ Pending:
 Finding during the check: `Electrostatics::None` applied Coulomb to 1-4 pairs but
 not to other pairs. This is fixed, and the regression test is in place. Earlier
 simulations with `None` and non-zero charges were affected.
+
+## Electrostatics check (2026-11-16)
+
+`amber_validate.py --pme 1e-5 5` runs the ACE-ALA-NME dipeptide with PME. The
+engine reports its Ewald alpha (0.780853 1/nm) and grid (128^3), and OpenMM is
+given the same values in a 9 nm periodic box. The B-spline order is 5 on both sides.
+
+- Potential, all terms: relative difference 9e-14. Forces: 1.4e-14.
+- Electrostatics alone (`--no-lj`): potential relative difference 9e-11, forces 3e-10.
+
+This covers the 1-4 Coulomb scaling, the exclusion corrections and the PME
+reciprocal sum. Impropers are still the only term not checked.

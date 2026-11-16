@@ -123,3 +123,7 @@ and electrostatics are not yet covered (see ADR-010).
 
 The check also found that `Electrostatics::None` had applied Coulomb to 1-4 pairs
 only. That is fixed. The fix is in the engine, and a regression test covers it.
+
+Electrostatics are now checked too. With PME on both sides, using the engine's
+Ewald parameters, the potential and forces agree with OpenMM to about 1e-10
+(electrostatics alone) and 1e-13 (all terms). Impropers are the remaining gap.
