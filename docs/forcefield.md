@@ -113,3 +113,13 @@ Not yet covered: electrostatics, impropers, Urey-Bradley terms, and periodic ima
 So the public-domain statement for the AMBER files is still secondary. It must be
 confirmed from the header or licence notice of the files the user obtains from
 AmberTools before anything is bundled.
+
+## Amber conversion, version 1 (2026-11-16)
+
+`validation/amber_convert.py` converts the user's own Amber XML, and
+`validation/amber_validate.py` checks the result against OpenMM. For ACE-ALA-NME
+from ff14SB, bonded and Lennard-Jones terms agree with OpenMM exactly. Impropers
+and electrostatics are not yet covered (see ADR-010).
+
+The check also found that `Electrostatics::None` had applied Coulomb to 1-4 pairs
+only. That is fixed. The fix is in the engine, and a regression test covers it.

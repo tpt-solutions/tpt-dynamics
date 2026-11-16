@@ -1,6 +1,6 @@
 # ADR-010: Converting user-supplied Amber parameters (proposed)
 
-- **Status:** Proposed. No code yet.
+- **Status:** Accepted for version 1. Bonds, angles, proper torsions and Lennard-Jones are implemented and checked against OpenMM. Impropers and electrostatics are pending (see "Version 1 result").
 - **Date:** 2026-11-16
 - **Related:** ADR-005 (licence policy), ADR-009, `docs/forcefield.md`
 
@@ -51,3 +51,25 @@ run real AMBER parameters through the engine without shipping them.
 - Confirm OpenMM as the conversion-time dependency (it is installed locally for
   development).
 - Confirm that impropers and Urey-Bradley terms come in the second version.
+
+## Version 1 result (2026-11-16)
+
+- Tool: `tpt-dynamics-sim/validation/amber_convert.py`. Check: `amber_validate.py`.
+- Test system: ACE-ALA-NME (22 atoms) from the user's `protein.ff14SB.xml`.
+  Converted: 11 bond types, 21 angle types, 26 dihedral types. Improper torsions skipped: 4.
+- Electrostatics off on both sides. Potential identical. Forces agree to 1e-15 relative.
+- The geometry is an embedding, not a real structure, so the energies are large. The
+  check tests the implementation, not the chemistry.
+
+Pending:
+
+1. Impropers. Amber's improper rules are wildcard-based and need OpenMM's
+   resolution, which the converter does not reimplement yet.
+2. Electrostatics. The engine has no unscreened Coulomb mode. The check needs
+   either a PME comparison with matched Ewald parameters, or a plain-Coulomb
+   mode in the engine.
+3. Licence. The Amber files' terms are still unconfirmed from their own headers.
+
+Finding during the check: `Electrostatics::None` applied Coulomb to 1-4 pairs but
+not to other pairs. This is fixed, and the regression test is in place. Earlier
+simulations with `None` and non-zero charges were affected.
