@@ -13,7 +13,7 @@ Two modes:
   reports the Ewald splitting alpha and FFT grid it chose, and OpenMM is given the
   same values. The B-spline order must be 5, which is OpenMM's fixed order.
 
-Impropers are not compared in either mode: the converter does not convert them yet.
+Impropers are included in both modes; the converter writes them as periodic improper types.
 The user's XML and the converted file are never committed. Run from the repo root:
 
     python tpt-dynamics-sim/validation/amber_validate.py \
@@ -85,17 +85,7 @@ def openmm_reference(ffxml_paths, residues, positions, box=None, pme=None, lj=Tr
     atoms, bonds, _ = ac.chain_topology(res_defs, residues)
     system = ac.build_openmm_system(ffxml_paths, res_defs, residues, atoms, bonds, types)
 
-    graph = {(min(i, j), max(i, j)) for i, j in bonds}
-    # Keep only proper torsions, matching what the converter writes.
-    old_index = next(i for i, f in enumerate(system.getForces()) if isinstance(f, mm.PeriodicTorsionForce))
-    old = system.getForce(old_index)
-    new = mm.PeriodicTorsionForce()
-    for k in range(old.getNumTorsions()):
-        i, j, kk, l_, n, phase, kf = old.getTorsionParameters(k)
-        if ac.is_proper((i, j, kk, l_), graph):
-            new.addTorsion(i, j, kk, l_, n, phase, kf)
-    system.removeForce(old_index)
-    system.addForce(new)
+    # All torsions are kept, impropers included: the converter writes both kinds.
 
     nb = next(f for f in system.getForces() if isinstance(f, mm.NonbondedForce))
     if pme is None:
@@ -147,6 +137,7 @@ def main(argv=None):
     info = ac.convert(args.ffxml, residues, params, args.name)
     print("converted:", info)
     lj = not args.no_lj
+    molecule = "-".join(residues)  # the converter writes the whole sequence as one molecule
     if not lj:
         import re
         text = params.read_text(encoding="utf-8")
@@ -155,7 +146,7 @@ def main(argv=None):
 
     if args.pme is None:
         box = BOX_NO_PME
-        header, positions, rust_f = run_ffenergy(params, residues, box)
+        header, positions, rust_f = run_ffenergy(params, [molecule], box)
         om_e, om_f, n = openmm_reference(args.ffxml, residues, positions, lj=lj)
         mode = "bonded + Lennard-Jones (electrostatics off)"
     else:
@@ -163,7 +154,7 @@ def main(argv=None):
         if order != 5:
             raise SystemExit("OpenMM's B-spline order is 5; use --pme TOL 5")
         box = BOX_PME
-        header, positions, rust_f = run_ffenergy(params, residues, box, pme=(tol, order))
+        header, positions, rust_f = run_ffenergy(params, [molecule], box, pme=(tol, order))
         alpha, grid = header["pme_alpha"], header["pme_grid"]
         print(f"pme: alpha {alpha:.6f} 1/nm, grid {grid}")
         om_e, om_f, n = openmm_reference(args.ffxml, residues, positions, box=box, pme=(alpha, grid), lj=lj)

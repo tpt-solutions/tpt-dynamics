@@ -127,3 +127,7 @@ only. That is fixed. The fix is in the engine, and a regression test covers it.
 Electrostatics are now checked too. With PME on both sides, using the engine's
 Ewald parameters, the potential and forces agree with OpenMM to about 1e-10
 (electrostatics alone) and 1e-13 (all terms). Impropers are the remaining gap.
+
+Impropers are checked too (periodic form, as in Amber). For ACE-ALA-NME,
+ACE-ALA-ALA-NME and ACE-GLY-SER-NME from ff14SB, all terms agree with OpenMM to
+about 1e-14 in potential and forces. Urey-Bradley terms are not yet converted.
