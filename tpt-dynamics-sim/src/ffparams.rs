@@ -146,6 +146,20 @@ pub struct DihedralTypeDef {
     pub terms: Vec<DihedralTermDef>,
 }
 
+/// Periodic improper torsion type (pattern of four type names, `"*"` allowed).
+///
+/// Each term is `k (1 + cos(n φ − phase))`, the form Amber uses for impropers. An
+/// improper matched by one of these types uses its terms; an improper that matches
+/// none falls back to [`ImproperTypeDef`].
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PeriodicImproperTypeDef {
+    /// Type pattern.
+    pub types: [String; 4],
+    /// Periodic terms.
+    pub terms: Vec<DihedralTermDef>,
+}
+
 /// Improper dihedral type (pattern of four type names, `"*"` allowed).
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -224,6 +238,9 @@ pub struct ParamSet {
     /// Improper dihedral types.
     #[serde(default)]
     pub impropertype: Vec<ImproperTypeDef>,
+    /// Periodic improper torsion types, tried before `impropertype`.
+    #[serde(default)]
+    pub periodicimpropertype: Vec<PeriodicImproperTypeDef>,
     /// Molecule templates.
     #[serde(default)]
     pub molecule: Vec<MoleculeDef>,
@@ -372,6 +389,19 @@ impl ParamSet {
             for t in &d.terms {
                 if !(t.k.is_finite() && t.phase.is_finite() && t.n >= 1) {
                     return bad(format!("dihedral type {:?}: invalid term", d.types));
+                }
+            }
+        }
+        for d in &self.periodicimpropertype {
+            if !d.types.iter().all(|t| known(t)) {
+                return bad(format!(
+                    "periodic improper type {:?} uses an unknown atom type",
+                    d.types
+                ));
+            }
+            for t in &d.terms {
+                if !(t.k.is_finite() && t.phase.is_finite() && t.n >= 1) {
+                    return bad(format!("periodic improper type {:?}: invalid term", d.types));
                 }
             }
         }
@@ -626,6 +656,17 @@ impl ParamSet {
         }
         for &atoms in &system.topology.impropers {
             let names = atoms.map(type_name);
+            if let Some(def) =
+                self.periodicimpropertype.iter().find(|d| pattern_matches(&d.types, names))
+            {
+                let terms_out = def
+                    .terms
+                    .iter()
+                    .map(|t| DihedralTerm { k: t.k, n: t.n, phase: t.phase.to_radians() })
+                    .collect();
+                terms.dihedrals.push(PeriodicDihedral { atoms, terms: terms_out });
+                continue;
+            }
             let def = self
                 .impropertype
                 .iter()
