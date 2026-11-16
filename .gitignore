@@ -39,3 +39,4 @@ output/
 # Misc
 .env
 *.log
+tpt-dynamics-sim/validation/generated/
