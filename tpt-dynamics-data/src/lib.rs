@@ -12,9 +12,9 @@
 //! * [`json`], [`crc32`], [`rng`]: dependency-free building blocks used by the
 //!   modules above.
 //!
-//! * [`parquet`] (feature `parquet`): read-only Parquet import, clean-room, with no
+//! * `parquet` (feature `parquet`): read-only Parquet import, clean-room, with no
 //!   Arrow or Parquet crates (ADR-008). Writing Parquet is not planned. See `todo.md` for the plan.
-#![forbid(unsafe_code)]
+#![deny(unsafe_code)]
 
 pub mod arrow_ipc;
 pub mod columnar;
@@ -26,6 +26,8 @@ pub mod http;
 pub mod jagged;
 pub mod json;
 pub mod lazy;
+#[cfg(feature = "mmap")]
+pub mod mapped;
 #[cfg(feature = "parquet")]
 pub mod parquet;
 pub mod physics;

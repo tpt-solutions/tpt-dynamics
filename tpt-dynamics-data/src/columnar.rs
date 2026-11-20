@@ -75,7 +75,7 @@ impl DType {
         }
     }
 
-    fn from_code(c: u8) -> Option<Self> {
+    pub(crate) fn from_code(c: u8) -> Option<Self> {
         match c {
             1 => Some(Self::F64),
             2 => Some(Self::I64),

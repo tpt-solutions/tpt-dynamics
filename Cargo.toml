@@ -29,8 +29,8 @@ target-lexicon = { path = "../target-lexicon-mit" }
 
 [workspace.lints.rust]
 # Unsafe code is forbidden by default. Any exception must be documented in an ADR
-# and carry a local `#[allow(unsafe_code)]` with a justification comment.
-unsafe_code = "forbid"
+# and carry a local `#[allow(unsafe_code)]` with a justification comment (ADR-011).
+unsafe_code = "deny"
 missing_docs = "warn"
 unreachable_pub = "warn"
 

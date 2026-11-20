@@ -15,11 +15,15 @@ default = []
 # Read-only Parquet import (own clean-room reader; no Arrow/Parquet crates).
 # Codecs: SNAPPY (`snap`, BSD-3-Clause) and GZIP (`flate2`, MIT OR Apache-2.0).
 parquet = ["dep:snap", "dep:flate2"]
+# Zero-copy memory-mapped reader for the columnar format (ADR-011). The mapping call is the
+# only unsafe block in the data crate.
+mmap = ["dep:memmap2"]
 
 [dependencies]
 rayon = "1"
 snap = { version = "1", optional = true }
 flate2 = { version = "1", optional = true, default-features = false, features = ["rust_backend"] }
+memmap2 = { version = "0.9", optional = true }
 
 [lints]
 workspace = true
