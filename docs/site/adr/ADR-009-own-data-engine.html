@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ADR-009: Keep the own data engine; supersede ADR-004 - tpt-dynamics docs</title>
+<link rel="stylesheet" href="../style.css">
+</head>
+<body>
+<header><a href="../index.html">tpt-dynamics documentation index</a></header>
+<div class="layout">
+<nav aria-label="Documentation">
+<ul><li><a href="../index.html">Index</a></li></ul>
+<h2>Tutorials</h2><ul><li><a href="../tutorials/hep-analysis.html">Tutorial: dilepton mass analysis with the data crate</a></li><li><a href="../tutorials/lj-fluid.html">Tutorial: Lennard-Jones fluid with the simulation crate</a></li></ul><h2>Architecture decision records</h2><ul><li><a href="ADR-001-pure-rust-md.html">ADR-001: Pure-Rust molecular dynamics over FFI to GROMACS</a></li><li><a href="ADR-002-lazy-data-frames.html">ADR-002: Lazy data frames for HEP analysis</a></li><li><a href="ADR-003-simd-nbody-kernels.html">ADR-003: SIMD-accelerated N-body kernels</a></li><li><a href="ADR-004-addendum-strata-gap-analysis.html">ADR-004 addendum: tpt-strata gap analysis</a></li><li><a href="ADR-004-data-engine-on-tpt-strata.html">ADR-004: Build the data engine on tpt-strata (no polars or arrow)</a></li><li><a href="ADR-005-licence-policy.html">ADR-005: Licence policy (no Apache-2.0-only dependencies)</a></li><li><a href="ADR-006-unsafe-code-policy.html">ADR-006: Unsafe-code policy</a></li><li><a href="ADR-007-pyo3-unsafe-exception.html">ADR-007: Unsafe-code exception for the Python bindings (tpt-dynamics-py)</a></li><li><a href="ADR-008-own-parquet-reader.html">ADR-008: Own read-only Parquet reader (import only)</a></li><li><a href="ADR-009-own-data-engine.html">ADR-009: Keep the own data engine; supersede ADR-004</a></li><li><a href="ADR-010-amber-parameter-converter.html">ADR-010: Converting user-supplied Amber parameters (proposed)</a></li></ul><h2>Benchmarks</h2><ul><li><a href="../benchmarks/compute-kernels.html">tpt-dynamics-compute kernel benchmarks</a></li><li><a href="../benchmarks/large-data.html">Large-data and milestone measurements</a></li><li><a href="../benchmarks/README.html">Performance regression tracking</a></li></ul><h2>Migration guides</h2><ul><li><a href="../migration/pyroot.html">Migrating from PyROOT to tptdynamics</a></li></ul><h2>Audit reports</h2><ul><li><a href="../audit/licence-review.html">Full-tree licence review</a></li><li><a href="../audit/security-review.html">Security review: parser attack surface and resource limits</a></li><li><a href="../audit/unsafe-audit.html">Unsafe-code audit</a></li></ul><h2>Project documentation</h2><ul><li><a href="../dependencies.html">Dependency audit</a></li><li><a href="../fuzzing.html">Fuzzing</a></li><li><a href="../release-checklist.html">Release checklist</a></li></ul>
+</nav>
+<main>
+<h1 id="adr-009-keep-the-own-data-engine-supersede-adr-004">ADR-009: Keep the own data engine; supersede ADR-004</h1>
+<ul><li><strong>Status:</strong> Accepted</li><li><strong>Date:</strong> 2026-11-16</li><li><strong>Supersedes:</strong> ADR-004 (build the data engine on tpt-strata)</li><li><strong>Related:</strong> ADR-004 addendum (gap analysis), ADR-002 (lazy data frames), ADR-008 (own Parquet reader)</li></ul>
+<h2 id="context">Context</h2>
+<p>ADR-004 chose tpt-strata as the data-engine foundation, on the premise that its gaps were small. The gap analysis in the ADR-004 addendum found that premise does not hold. The needs that define the engine are missing from tpt-strata 0.1.0: a logical lazy plan with expressions, chunked file streaming, unsigned integers, binary columns, and list (jagged) columns.</p>
+<p>By the time of this decision, <code>tpt-dynamics-data</code> already implements those layers itself, and none of them depends on tpt-strata:</p>
+<ul><li>lazy plans with expressions, predicate and projection pushdown, constant folding, a chunked and parallel executor, and histogram fill (<code>src/lazy/</code>);</li><li>chunked CSV reading (<code>csv.rs</code>), including parallel batch parsing;</li><li>the columnar and row-store formats, and an own read-only Parquet reader (ADR-008);</li><li>jagged arrays (<code>jagged.rs</code>) and a trajectory reader with bounded memory;</li><li>distributed execution of lazy plans over TCP, and HTTP range reads.</li></ul>
+<h2 id="decision">Decision</h2>
+<ol><li>The data engine remains the in-house <code>tpt-dynamics-data</code> crate. It does not depend on tpt-strata, and tpt-strata is not added as a dependency.</li><li>ADR-004 is superseded by this record.</li><li>If ad-hoc SQL over tables is wanted later, tpt-strata may be added as an optional feature for that purpose only. That would need its own ADR.</li><li>The drafted upstream issues in <code>docs/upstream/tpt-strata-issues.md</code> are not filed. The owner decides separately whether to raise them.</li></ol>
+<h2 id="consequences">Consequences</h2>
+<ul><li>No new dependency and no licence review for tpt-strata.</li><li>The engine&#x27;s behaviour is covered by the project&#x27;s own tests, including the fuzz and distributed tests.</li><li>Any future gap in the engine is fixed here, not upstream.</li><li>The cost is maintaining the data layers in this repo. That cost already exists, because the layers are implemented.</li></ul>
+<footer>Source: <a href="https://github.com/tpt-solutions/tpt-dynamics/blob/master/docs/adr/ADR-009-own-data-engine.md">docs/adr/ADR-009-own-data-engine.md</a> (rendered by docs/site/build.py)</footer>
+</main>
+</div>
+</body>
+</html>

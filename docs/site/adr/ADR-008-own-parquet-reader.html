@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ADR-008: Own read-only Parquet reader (import only) - tpt-dynamics docs</title>
+<link rel="stylesheet" href="../style.css">
+</head>
+<body>
+<header><a href="../index.html">tpt-dynamics documentation index</a></header>
+<div class="layout">
+<nav aria-label="Documentation">
+<ul><li><a href="../index.html">Index</a></li></ul>
+<h2>Tutorials</h2><ul><li><a href="../tutorials/hep-analysis.html">Tutorial: dilepton mass analysis with the data crate</a></li><li><a href="../tutorials/lj-fluid.html">Tutorial: Lennard-Jones fluid with the simulation crate</a></li></ul><h2>Architecture decision records</h2><ul><li><a href="ADR-001-pure-rust-md.html">ADR-001: Pure-Rust molecular dynamics over FFI to GROMACS</a></li><li><a href="ADR-002-lazy-data-frames.html">ADR-002: Lazy data frames for HEP analysis</a></li><li><a href="ADR-003-simd-nbody-kernels.html">ADR-003: SIMD-accelerated N-body kernels</a></li><li><a href="ADR-004-addendum-strata-gap-analysis.html">ADR-004 addendum: tpt-strata gap analysis</a></li><li><a href="ADR-004-data-engine-on-tpt-strata.html">ADR-004: Build the data engine on tpt-strata (no polars or arrow)</a></li><li><a href="ADR-005-licence-policy.html">ADR-005: Licence policy (no Apache-2.0-only dependencies)</a></li><li><a href="ADR-006-unsafe-code-policy.html">ADR-006: Unsafe-code policy</a></li><li><a href="ADR-007-pyo3-unsafe-exception.html">ADR-007: Unsafe-code exception for the Python bindings (tpt-dynamics-py)</a></li><li><a href="ADR-008-own-parquet-reader.html">ADR-008: Own read-only Parquet reader (import only)</a></li><li><a href="ADR-009-own-data-engine.html">ADR-009: Keep the own data engine; supersede ADR-004</a></li><li><a href="ADR-010-amber-parameter-converter.html">ADR-010: Converting user-supplied Amber parameters (proposed)</a></li></ul><h2>Benchmarks</h2><ul><li><a href="../benchmarks/compute-kernels.html">tpt-dynamics-compute kernel benchmarks</a></li><li><a href="../benchmarks/large-data.html">Large-data and milestone measurements</a></li><li><a href="../benchmarks/README.html">Performance regression tracking</a></li></ul><h2>Migration guides</h2><ul><li><a href="../migration/pyroot.html">Migrating from PyROOT to tptdynamics</a></li></ul><h2>Audit reports</h2><ul><li><a href="../audit/licence-review.html">Full-tree licence review</a></li><li><a href="../audit/security-review.html">Security review: parser attack surface and resource limits</a></li><li><a href="../audit/unsafe-audit.html">Unsafe-code audit</a></li></ul><h2>Project documentation</h2><ul><li><a href="../dependencies.html">Dependency audit</a></li><li><a href="../fuzzing.html">Fuzzing</a></li><li><a href="../release-checklist.html">Release checklist</a></li></ul>
+</nav>
+<main>
+<h1 id="adr-008-own-read-only-parquet-reader-import-only">ADR-008: Own read-only Parquet reader (import only)</h1>
+<ul><li><strong>Status:</strong> Accepted</li><li><strong>Date:</strong> 2026-11-16</li></ul>
+<h2 id="context">Context</h2>
+<p>Parquet is needed only to import existing data. The Parquet crates (<code>parquet</code>, <code>arrow</code>) are Apache-2.0 only and banned by ADR-005, and <code>tpt-strata-parquet</code> depends on them (ADR-004). So the Phase 0 licence decision closed the Parquet item.</p>
+<p>Parquet is a public format with a public specification. Its codec crates are permissive: <code>snap</code> (BSD-3-Clause) and <code>flate2</code> (MIT OR Apache-2.0).</p>
+<h2 id="decision">Decision</h2>
+<p>Implement a clean-room, read-only Parquet reader in <code>tpt-dynamics-data</code>, behind the optional <code>parquet</code> feature (off by default):</p>
+<ul><li><strong>Scope:</strong> flat schemas; <code>BOOLEAN</code>, <code>INT32</code>, <code>INT64</code>, <code>FLOAT</code>, <code>DOUBLE</code>; <code>PLAIN</code>, <code>RLE_DICTIONARY</code> and <code>PLAIN_DICTIONARY</code> encodings; <code>UNCOMPRESSED</code>, <code>SNAPPY</code> and <code>GZIP</code> codecs; data page v1.</li><li><strong>Not supported (explicit errors):</strong> nested and repeated fields, byte-array, <code>INT96</code> and fixed-length binary columns, data page v2, <code>ZSTD</code>/<code>LZ4</code>/<code>BROTLI</code>, and any null value, because <code>Column</code> has no null representation.</li><li><strong>Dependencies:</strong> <code>snap</code> and <code>flate2</code> (default features off, <code>rust_backend</code>). No <code>*-sys</code> crate and no C code.</li><li><strong>Writing Parquet</strong> is out of scope.</li><li><strong>Testing:</strong> fixtures written by pyarrow are committed under <code>tests/fixtures/parquet/</code>. Tests cover every codec and encoding combination, projection, lazy-engine integration, error paths, and a byte-flip corruption sweep that must not panic.</li></ul>
+<h2 id="consequences">Consequences</h2>
+<ul><li>Corrupt input is bounded: chunk reads are checked against the file length, page sizes are capped at 1 GiB, and RLE allocations use fallible reserve.</li><li>Each column chunk is decoded in memory, so peak memory is one chunk plus the output. Streaming decode is not implemented.</li><li>Unsigned and timestamp logical types are read as raw signed integers.</li><li>Extending the scope (nested types, ZSTD, data page v2) needs a new ADR entry and tests against pyarrow fixtures.</li></ul>
+<footer>Source: <a href="https://github.com/tpt-solutions/tpt-dynamics/blob/master/docs/adr/ADR-008-own-parquet-reader.md">docs/adr/ADR-008-own-parquet-reader.md</a> (rendered by docs/site/build.py)</footer>
+</main>
+</div>
+</body>
+</html>

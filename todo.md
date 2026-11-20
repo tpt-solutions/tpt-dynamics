@@ -107,7 +107,7 @@ Legend: `- [ ]` todo · `- [x]` done · **bold** = milestone
 - [x] Streaming CSV reader for very large files
 - [x] Parquet **import** via own clean-room reader (feature `parquet`; read-only, flat schemas, SNAPPY/GZIP; scope in ADR-008). Parquet writing and the `arrow`/`parquet` crates are out (ADR-004/005).
 - [x] Custom binary columnar format for detector data (spec, versioning, checksums, compression)
-- [ ] Zero-copy / memory-mapped readers where possible
+- [x] Zero-copy / memory-mapped readers where possible — `tpt-dynamics-data` feature `mmap` (`src/mapped.rs`), the one unsafe exception (ADR-011)
 - [x] Fuzz tests for all parsers
 
 ### Benchmarks
@@ -217,8 +217,8 @@ Legend: `- [ ]` todo · `- [x]` done · **bold** = milestone
 - [x] Documentation site and tutorials
 - [x] Examples directory (HEP analysis, LJ fluid, water box)
 - [ ] Benchmarks vs GROMACS and ROOT published
-- [ ] Final `cargo deny check` and full-tree licence review
-- [ ] Final `cargo publish --dry-run` for all crates
+- [ ] Final `cargo deny check` and full-tree licence review — `cargo deny check` passes; full-tree review updated in `docs/audit/licence-review.md` (2026-11-20). Open: owner decision on the Windows-only `windows-sys` exception (finding 1)
+- [ ] Final `cargo publish --dry-run` for all crates — core, data and compute pass; sim and cli fail until their upstream crates are on crates.io (expected). LICENSE-MIT, LICENSE-APACHE and NOTICE are now copied into all five publishable crates
 - [ ] Publish order: core → compute/data → sim → cli
 - [ ] Publish to PyPI
 - [ ] Tag v0.1.0, release notes, changelog
