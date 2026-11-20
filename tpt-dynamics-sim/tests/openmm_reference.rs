@@ -1,7 +1,7 @@
-//! Cross-check against OpenMM (todo Phase 5, validation).
+//! Cross-check against `OpenMM` (todo Phase 5, validation).
 //!
 //! `validation/openmm_chain_reference.py` builds the same residue chains, with
-//! its own geometry and topology code, and evaluates them with OpenMM. Its
+//! its own geometry and topology code, and evaluates them with `OpenMM`. Its
 //! outputs are the fixtures in `validation/fixtures/`: positions and the total
 //! potential energy in kJ/mol. This test rebuilds each chain with
 //! `ParamSet::assemble_chains` and checks that positions agree exactly and that
@@ -112,11 +112,8 @@ fn check_case(name: &str, residues: &[&str], fixture: &str) {
 
     // Forces, compared with the largest force as the scale.
     let scale = reference.forces.iter().map(|f| f.norm()).fold(1.0_f64, f64::max);
-    let worst_force = forces
-        .iter()
-        .zip(&reference.forces)
-        .map(|(a, b)| (*a - *b).norm())
-        .fold(0.0_f64, f64::max);
+    let worst_force =
+        forces.iter().zip(&reference.forces).map(|(a, b)| (*a - *b).norm()).fold(0.0_f64, f64::max);
     assert!(
         worst_force / scale < 1e-9,
         "{name}: forces differ by {worst_force} (largest reference force {scale})"
@@ -142,9 +139,5 @@ fn three_lipid_like_chain_matches_openmm() {
 
 #[test]
 fn mixed_chain_matches_openmm() {
-    check_case(
-        "mixed",
-        &["RSA", "RSA", "LIP"],
-        include_str!("../validation/fixtures/mixed.txt"),
-    );
+    check_case("mixed", &["RSA", "RSA", "LIP"], include_str!("../validation/fixtures/mixed.txt"));
 }

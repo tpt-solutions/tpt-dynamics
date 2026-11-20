@@ -1,6 +1,7 @@
 //! `CsvReader::next_batch` must give exactly the records the iterator gives, for
 //! any batch size, including quoted fields, blank lines and error positions.
 
+use std::fmt::Write as _;
 use std::io::Cursor;
 
 use tpt_dynamics_data::csv::{CsvOptions, CsvReader};
@@ -12,9 +13,9 @@ fn sample(rows: usize) -> String {
             s.push('\n'); // blank line, skipped
         }
         if i % 7 == 3 {
-            s.push_str(&format!("{i},\"quoted, {i}\",{}.5\n", i * 2));
+            writeln!(s, "{i},\"quoted, {i}\",{}.5", i * 2).unwrap();
         } else {
-            s.push_str(&format!("{i},plain,{}\n", i * 2));
+            writeln!(s, "{i},plain,{}", i * 2).unwrap();
         }
     }
     s
@@ -66,7 +67,7 @@ fn field_count_error_reports_the_same_line() {
     let iter_err = loop {
         match iter.next() {
             Some(Err(e)) => break e.to_string(),
-            Some(Ok(_)) => continue,
+            Some(Ok(_)) => {}
             None => panic!("expected an error"),
         }
     };
@@ -80,6 +81,6 @@ fn empty_input_gives_empty_batches() {
         CsvOptions { has_header: false, ..CsvOptions::default() },
     )
     .unwrap();
-    assert!(reader.next_batch(10).unwrap().is_empty());
-    assert!(reader.next_batch(10).unwrap().is_empty());
+    assert_eq!(reader.next_batch(10).unwrap().len(), 0);
+    assert_eq!(reader.next_batch(10).unwrap().len(), 0);
 }

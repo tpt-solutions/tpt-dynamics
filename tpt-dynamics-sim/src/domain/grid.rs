@@ -82,6 +82,7 @@ impl DomainGrid {
 
     /// A grid with the same dimensions whose boundaries are atom-count quantiles
     /// along each axis. `lengths` is the box edge.
+    #[must_use]
     pub fn rebalanced(&self, positions: &[Vec3], lengths: Vec3) -> Self {
         let l = [lengths.x, lengths.y, lengths.z];
         let n = positions.len();
@@ -118,12 +119,12 @@ pub fn auto_dims(n: usize, lengths: Vec3) -> [usize; 3] {
     let mut best = [n, 1, 1];
     let mut best_cost = f64::INFINITY;
     for nx in 1..=n {
-        if n % nx != 0 {
+        if !n.is_multiple_of(nx) {
             continue;
         }
         let rest = n / nx;
         for ny in 1..=rest {
-            if rest % ny != 0 {
+            if !rest.is_multiple_of(ny) {
                 continue;
             }
             let dims = [nx, ny, rest / ny];
@@ -158,8 +159,11 @@ mod tests {
         for d in 0..g.n_domains() {
             assert_eq!(g.index(g.coords(d)), d);
             let (lo, hi) = g.region(d);
-            let mid =
-                Vec3::new(0.5 * (lo[0] + hi[0]), 0.5 * (lo[1] + hi[1]), 0.5 * (lo[2] + hi[2]));
+            let mid = Vec3::new(
+                f64::midpoint(lo[0], hi[0]),
+                f64::midpoint(lo[1], hi[1]),
+                f64::midpoint(lo[2], hi[2]),
+            );
             assert_eq!(g.owner(mid), d);
         }
     }
@@ -169,7 +173,7 @@ mod tests {
         let lengths = Vec3::new(10.0, 10.0, 10.0);
         // All atoms in the first tenth of x: quantile splits must squeeze the
         // first domains into a narrow slab while keeping boundaries ordered.
-        let pos: Vec<Vec3> = (0..100).map(|i| Vec3::new(0.001 * i as f64, 5.0, 5.0)).collect();
+        let pos: Vec<Vec3> = (0..100).map(|i| Vec3::new(0.001 * f64::from(i), 5.0, 5.0)).collect();
         let g = DomainGrid::uniform([4, 1, 1], lengths).rebalanced(&pos, lengths);
         let b = g.boundaries(0);
         assert!(b.windows(2).all(|w| w[0] <= w[1]));

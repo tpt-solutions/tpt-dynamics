@@ -15,7 +15,7 @@
 //!   builder and a SIMD cluster-pair kernel.
 //! * [`fft`]: pure-Rust radix-2 complex FFT (1D and 3D, rayon-parallel).
 //! * [`pme`]: smooth particle-mesh Ewald reciprocal solver and parameter selection.
-//! * [`reference`]: brute-force Ewald sums used to validate PME.
+//! * [`mod@reference`]: brute-force Ewald sums used to validate PME.
 //!
 //! Units: the Coulomb constant is 1 and the caller chooses length/energy units.
 //! Forces are *added* into [`ForceBuffers`], so callers zero them first.

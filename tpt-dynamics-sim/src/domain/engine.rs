@@ -398,7 +398,7 @@ impl Worker<'_, '_> {
         let ghosts = &mut self.ghosts;
         let self_rank = self.rank;
         for a in owned {
-            for d in 0..p {
+            for (d, out) in outbound.iter_mut().enumerate() {
                 let (lo, hi) = grid.region(d);
                 let xs = axis_images(a.pos.x, lo[0], hi[0], lengths.x, rc);
                 let ys = axis_images(a.pos.y, lo[1], hi[1], lengths.y, rc);
@@ -418,7 +418,7 @@ impl Worker<'_, '_> {
                                 }
                                 ghosts.push(g);
                             } else {
-                                outbound[d].push(g);
+                                out.push(g);
                             }
                         }
                     }

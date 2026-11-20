@@ -1,7 +1,7 @@
 //! Property tests for unit conversions: every forward/inverse pair must round-trip
 //! to within floating-point rounding, over a wide range of magnitudes and signs.
 //!
-//! Inputs are generated from a fixed-seed SplitMix64 so failures are reproducible.
+//! Inputs are generated from a fixed-seed `SplitMix64` so failures are reproducible.
 
 use tpt_dynamics_core::quantity::{Energy, Length, Mass, Temperature};
 use tpt_dynamics_core::units::*;
@@ -36,6 +36,8 @@ impl Gen {
     }
 }
 
+/// Exact equality is intended only when both values are zero (signed zeros compare equal).
+#[allow(clippy::float_cmp)]
 fn close(a: f64, b: f64) -> bool {
     let scale = a.abs().max(b.abs());
     if scale == 0.0 {

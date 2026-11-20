@@ -7,7 +7,7 @@
 //! result matches a local run of the same plan.
 //!
 //! Workers are plain TCP servers speaking a small length-prefixed binary
-//! protocol (see [`codec`]). They resolve source names themselves, so the
+//! protocol (see `codec`). They resolve source names themselves, so the
 //! source data must be reachable from every worker, for example on shared
 //! storage such as a [`crate::rowstore::RowStore`] file.
 //!

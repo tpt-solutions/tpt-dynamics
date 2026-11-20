@@ -7,17 +7,17 @@
 //! and only per-frame results are kept. The series functions take
 //! `IntoIterator<Item = Snapshot>` for that reason.
 //!
-//! - [`rmsd`] / [`rmsd_series`]: root-mean-square deviation after least-squares
+//! - [`fn@rmsd`] / [`rmsd_series`]: root-mean-square deviation after least-squares
 //!   superposition (Horn's quaternion method, eigenvalues by Jacobi rotations).
 //! - [`radius_of_gyration`] / [`rg_series`]: optionally mass-weighted.
 //! - [`hbond`]: geometric hydrogen-bond counts from donor–hydrogen and acceptor
 //!   index lists.
-//! - [`rdf`]: radial distribution function with minimum-image distances in an
+//! - [`fn@rdf`]: radial distribution function with minimum-image distances in an
 //!   orthorhombic box, normalised by the ideal-gas pair count.
 //!
 //! Positions are used exactly as given. Molecules that straddle the periodic
 //! boundary must be made whole before calling [`radius_of_gyration`] or
-//! [`rmsd`]; only the distance-based analyses apply the minimum-image convention.
+//! [`fn@rmsd`]; only the distance-based analyses apply the minimum-image convention.
 
 use std::fmt;
 

@@ -56,7 +56,7 @@ fn sample_store_bytes() -> Vec<u8> {
 
 fn mutate(rng: &mut SplitMix64, base: &[u8]) -> Vec<u8> {
     let mut out = base.to_vec();
-    for _ in 0..1 + rng.next_u64() % 5 {
+    for _ in 0..=(rng.next_u64() % 5) {
         if out.is_empty() {
             break;
         }
@@ -131,7 +131,7 @@ fn http_response_parser_never_panics() {
 
     let mut rng = SplitMix64::new(0xABCD);
     for _ in 0..iterations() {
-        let response = if rng.next_u64() % 2 == 0 {
+        let response = if rng.next_u64().is_multiple_of(2) {
             (0..(rng.next_u64() % 200) as usize).map(|_| rng.next_u64() as u8).collect()
         } else {
             mutate(&mut rng, &valid)
@@ -150,7 +150,7 @@ fn send_frame(stream: &mut TcpStream, payload: &[u8]) -> std::io::Result<()> {
 #[test]
 fn worker_survives_garbage_and_keeps_serving() {
     let df = DataFrame::new(vec![
-        ("pt", Column::F64((0..500).map(|i| (i % 50) as f64).collect())),
+        ("pt", Column::F64((0..500).map(|i| f64::from(i % 50)).collect())),
         ("charge", Column::I64((0..500).map(|i| if i % 2 == 0 { 1 } else { -1 }).collect())),
     ])
     .expect("frame");

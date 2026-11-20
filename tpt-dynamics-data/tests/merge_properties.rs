@@ -125,7 +125,7 @@ fn merged_partitions_match_serial_fill_for_all_histogram_types() {
 
         let serial1 = fill1(&data);
         let serial2 = fill2(&data);
-        let serialp = fillp(&data);
+        let parallel = fillp(&data);
 
         let mut m1 = Histogram1D::uniform(40, -6.0, 6.0).unwrap();
         let mut m2 = Histogram2D::uniform(12, -6.0, 6.0, 12, -6.0, 6.0).unwrap();
@@ -139,7 +139,7 @@ fn merged_partitions_match_serial_fill_for_all_histogram_types() {
 
         assert_h1_equal(&m1, &serial1);
         assert_h2_equal(&m2, &serial2);
-        assert_profile_equal(&mp, &serialp);
+        assert_profile_equal(&mp, &parallel);
     }
 }
 

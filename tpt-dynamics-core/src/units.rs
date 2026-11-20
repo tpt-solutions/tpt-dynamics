@@ -159,7 +159,7 @@ mod tests {
 #[cfg(test)]
 mod property_tests {
     //! Property-style checks: round-trips over a deterministic sweep of inputs
-    //! (a SplitMix64 stream), so failures are reproducible without a PRNG crate.
+    //! (a `SplitMix64` stream), so failures are reproducible without a PRNG crate.
     use super::*;
 
     struct SplitMix64(u64);

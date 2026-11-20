@@ -121,7 +121,7 @@ fn profile(sys: &System, ff: &LennardJones) -> Result<(f64, f64), String> {
     for _ in 0..reps {
         list.rebuild(&sys.positions, &sys.sim_box).map_err(|e| e.to_string())?;
     }
-    let build = t.elapsed().as_secs_f64() / reps as f64;
+    let build = t.elapsed().as_secs_f64() / f64::from(reps);
     let mut forces = vec![Vec3::ZERO; sys.len()];
     let t = Instant::now();
     for _ in 0..reps {
@@ -135,7 +135,7 @@ fn profile(sys: &System, ff: &LennardJones) -> Result<(f64, f64), String> {
             &mut forces,
         );
     }
-    let force = t.elapsed().as_secs_f64() / reps as f64;
+    let force = t.elapsed().as_secs_f64() / f64::from(reps);
     Ok((build, force))
 }
 

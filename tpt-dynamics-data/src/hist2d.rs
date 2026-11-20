@@ -3,7 +3,7 @@
 //! The histogram stores an `(nx + 2) × (ny + 2)` grid: the inner `nx × ny` cells
 //! are the regular bins, and the outer ring holds the under/overflow of each
 //! axis (corners included). Bins are half-open, as in
-//! [`Histogram1D`](crate::hist1d::Histogram1D).
+//! [`crate::hist1d::Histogram1D`].
 
 use crate::hist1d::{locate, uniform_edges, validate_edges, Histogram1D, HistogramError, Slot};
 

@@ -1,6 +1,6 @@
 //! Prints the potential energy, positions and forces of a residue chain built from
 //! an ffparams file. Used by `validation/amber_validate.py`, which compares the
-//! output with OpenMM.
+//! output with `OpenMM`.
 //!
 //! ```text
 //! cargo run --release -p tpt-dynamics-sim --example ffenergy -- \

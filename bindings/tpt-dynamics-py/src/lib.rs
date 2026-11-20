@@ -2,10 +2,10 @@
 //!
 //! Exposes three areas of the Rust workspace:
 //!
-//! * [`frame`]: lazy data frames (scan from numpy arrays or CSV, filter,
+//! * `frame`: lazy data frames (scan from numpy arrays or CSV, filter,
 //!   select, `with_column`, `group_by` + `agg`, `collect` to numpy arrays).
-//! * [`hist`]: 1D and 2D physics histograms with numpy fill, merge and dict export.
-//! * [`sim`]: molecular dynamics runs configured from a TOML string.
+//! * `hist`: 1D and 2D physics histograms with numpy fill, merge and dict export.
+//! * `sim`: molecular dynamics runs configured from a TOML string.
 //!
 //! The crate is a thin layer: all physics and data logic lives in
 //! `tpt-dynamics-data` and `tpt-dynamics-sim`. Hand-written code here contains
