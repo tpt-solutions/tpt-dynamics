@@ -1,0 +1,79 @@
+name: Large-data benchmark (manual)
+
+# Generates the 10.49 GB collision-event CSV and times `tptdyn analyze` against
+# ROOT RDataFrame on the same file. Manual only: the run takes well over an hour
+# and the input is about 10 GB, so it is not run on pull requests.
+#
+# The GitHub-hosted runner has about 16 GB of RAM (the RDataFrame run needs about
+# 7.5 GB) and about 4 vCPUs. Timings are noisy and are not comparable with the
+# 20-core development machine in docs/benchmarks/large-data.md. Compare the two
+# tools on the same runner only.
+#
+# The ROOT comparison uses an external LGPL tool. It runs as a separate process,
+# is not linked into any crate and is not distributed (see docs/audit/licence-review.md).
+
+on:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  EVENTS_CSV: ${{ runner.temp }}/events-10gb.csv
+  ANALYSIS_DIR: ${{ runner.temp }}/analysis-10gb
+
+jobs:
+  large-benchmark:
+    name: tptdyn analyze vs ROOT RDataFrame (10 GB)
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free disk space (runner image has about 14 GB free)
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/share/boost
+          df -h /
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build tptdyn and the event generator
+        run: cargo build --release -p tpt-dynamics-cli -p tpt-dynamics-data --examples
+
+      - name: Generate the 10 GB event CSV
+        run: |
+          ./target/release/examples/generate_events --events 27300000 --seed 42 --out "$EVENTS_CSV"
+          size=$(stat -c %s "$EVENTS_CSV")
+          echo "CSV size: $size bytes"
+          test "$size" -eq 10488817642
+
+      - name: tptdyn analyze (timed)
+        run: |
+          start=$(date +%s.%N)
+          ./target/release/tptdyn analyze "$EVENTS_CSV" --filter "pt > 5" \
+            --hist pt,100,0,100 --hist eta,100,-5,5 --out-dir "$ANALYSIS_DIR" \
+            > tptdyn-analyze.txt 2>&1
+          end=$(date +%s.%N)
+          echo "tptdyn_wall_s=$(python3 -c "print(round($end-$start,1))")" | tee -a tptdyn-analyze.txt
+
+      - name: Install ROOT from conda-forge
+        run: |
+          curl -sSLo mm.tar.bz2 https://micro.mamba.pm/api/micromamba/linux-64/latest
+          tar -xjf mm.tar.bz2 bin/micromamba
+          ./bin/micromamba create -y -q -p "$HOME/root-env" -c conda-forge root
+          "$HOME/root-env/bin/root-config" --version
+
+      - name: ROOT RDataFrame (1 thread, then 4 threads)
+        run: |
+          for t in 1 4; do
+            "$HOME/root-env/bin/python" docs/benchmarks/scripts/root_analyze.py "$EVENTS_CSV" "$t" \
+              | tee -a root-rdf.txt
+          done
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: large-benchmark-results
+          path: |
+            tptdyn-analyze.txt
+            root-rdf.txt
