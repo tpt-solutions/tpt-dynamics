@@ -3,8 +3,10 @@
 //! Each "node" is a scoped thread that fills its own partial histogram, encodes it
 //! with the binary serialiser, and sends only bytes back. The coordinator decodes
 //! the partials and merges them in a different order from the one they were
-//! produced in. The result must match a single serial fill. No network is used;
-//! distributed execution of lazy plans is not implemented.
+//! produced in. The result must match a single serial fill. No network is used.
+//! This test covers histogram merging only. Distributed execution of lazy plans
+//! is a separate feature (`lazy::distributed`): it runs over loopback TCP and its
+//! protocol has no authentication, so it is for trusted networks only.
 
 use tpt_dynamics_data::hist1d::Histogram1D;
 use tpt_dynamics_data::rng::SplitMix64;
