@@ -7,6 +7,7 @@
 
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -47,7 +48,12 @@ fn sample_frame() -> DataFrame {
 }
 
 fn sample_store_bytes() -> Vec<u8> {
-    let path = std::env::temp_dir().join(format!("tpt-fuzz-net-{}.rows", std::process::id()));
+    // Tests run on parallel threads in one process, so the name must be unique
+    // per call; otherwise one test's `remove_file` can delete another's file.
+    static NEXT: AtomicUsize = AtomicUsize::new(0);
+    let n = NEXT.fetch_add(1, Ordering::Relaxed);
+    let path = std::env::temp_dir()
+        .join(format!("tpt-fuzz-net-{}-{n}.rows", std::process::id()));
     write_rowstore(&path, &sample_frame()).expect("write");
     let bytes = std::fs::read(&path).expect("read");
     let _ = std::fs::remove_file(path);
