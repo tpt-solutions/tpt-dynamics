@@ -28,6 +28,9 @@ Thumbs.db
 # Data & simulation output
 *.csv
 *.parquet
+# Parquet test fixtures are committed; they are inputs, not output.
+!tpt-dynamics-data/tests/fixtures/parquet/*.parquet
+!tpt-dynamics-cli/tests/fixtures/*.parquet
 *.root
 *.xtc
 *.trr
