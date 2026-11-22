@@ -10,33 +10,48 @@ use std::path::Path;
 use crate::cli::{InitArgs, Template};
 use crate::error::{input, runtime, CliError};
 
-/// One file of a template: its path inside the project and its embedded text.
-type TemplateFile = (&'static str, &'static str);
+/// One file of a template: its path inside the project and its text.
+type TemplateFile = (&'static str, String);
 
-const LJ_FLUID: &[TemplateFile] = &[
-    ("simulate.toml", include_str!("../templates/lj-fluid/simulate.toml")),
-    ("README.txt", include_str!("../templates/lj-fluid/README.txt")),
-];
-
-const HEP_ANALYSIS: &[TemplateFile] = &[
-    ("make_events.py", include_str!("../templates/hep-analysis/make_events.py")),
-    ("analyze.txt", include_str!("../templates/hep-analysis/analyze.txt")),
-    ("README.txt", include_str!("../templates/hep-analysis/README.txt")),
-];
+/// Molecules of the water-box template: the grid's 8 x 8 x 8 copies of SOL.
+const WATER_BOX_MOLECULES: usize = 8 * 8 * 8;
 
 /// The files of a template.
-fn files(template: Template) -> &'static [TemplateFile] {
+fn files(template: Template) -> Vec<TemplateFile> {
     match template {
-        Template::LjFluid => LJ_FLUID,
-        Template::HepAnalysis => HEP_ANALYSIS,
+        Template::LjFluid => vec![
+            ("simulate.toml", include_str!("../templates/lj-fluid/simulate.toml").to_owned()),
+            ("README.txt", include_str!("../templates/lj-fluid/README.txt").to_owned()),
+        ],
+        Template::HepAnalysis => vec![
+            ("make_events.py", include_str!("../templates/hep-analysis/make_events.py").to_owned()),
+            ("analyze.txt", include_str!("../templates/hep-analysis/analyze.txt").to_owned()),
+            ("README.txt", include_str!("../templates/hep-analysis/README.txt").to_owned()),
+        ],
+        Template::WaterBox => vec![
+            ("simulate.toml", water_box_config()),
+            ("README.txt", include_str!("../templates/water-box/README.txt").to_owned()),
+        ],
     }
+}
+
+/// The water-box `simulate.toml`, with the SETTLE molecule list written out: one
+/// `[O, H1, H2]` triple of atom indices per molecule, eight triples per line.
+fn water_box_config() -> String {
+    let triples: Vec<String> = (0..WATER_BOX_MOLECULES)
+        .map(|m| format!("[{}, {}, {}]", 3 * m, 3 * m + 1, 3 * m + 2))
+        .collect();
+    let lines: Vec<String> = triples.chunks(8).map(|c| format!("  {},", c.join(", "))).collect();
+    let list = format!("\n{}\n", lines.join("\n"));
+    include_str!("../templates/water-box/simulate.toml").replace("@MOLECULES@", &list)
 }
 
 /// Runs the `init` subcommand.
 pub(crate) fn run(args: &InitArgs, quiet: bool) -> Result<(), CliError> {
     write_template(args.template, &args.dir, args.force)?;
     if !quiet {
-        let names: Vec<&str> = files(args.template).iter().map(|(name, _)| *name).collect();
+        let targets = files(args.template);
+        let names: Vec<&str> = targets.iter().map(|(name, _)| *name).collect();
         println!("created {} in {}: {}", names.len(), args.dir.display(), names.join(", "));
     }
     Ok(())
@@ -72,10 +87,20 @@ mod tests {
 
     #[test]
     fn embedded_templates_are_not_empty() {
-        for template in [Template::LjFluid, Template::HepAnalysis] {
+        for template in [Template::LjFluid, Template::HepAnalysis, Template::WaterBox] {
             for (name, text) in files(template) {
                 assert!(!text.trim().is_empty(), "{name} is empty");
             }
         }
+    }
+
+    #[test]
+    fn water_box_lists_every_molecule_and_no_placeholder() {
+        let text = water_box_config();
+        assert!(!text.contains("@MOLECULES@"));
+        // First and last molecule of 512; no triple beyond the last molecule.
+        assert!(text.contains("[0, 1, 2]"));
+        assert!(text.contains("[1533, 1534, 1535]"));
+        assert!(!text.contains("[1536"));
     }
 }

@@ -215,7 +215,7 @@ Legend: `- [ ]` todo · `- [x]` done · **bold** = milestone
 
 ### Release
 - [x] Documentation site and tutorials
-- [ ] Examples directory (HEP analysis, LJ fluid, water box) — HEP analysis and LJ fluid exist; no water-box example yet, because it needs a water ffparams file and no parameter set is bundled (owner decision)
+- [x] Examples directory (HEP analysis, LJ fluid, water box) — the water box is the `tptdyn init water-box` scaffold, indexed in `examples/README.md`; no parameter file is bundled, per the owner decision in `docs/forcefield.md`
 - [ ] Benchmarks vs GROMACS and ROOT published
 - [ ] Final `cargo deny check` and full-tree licence review — `cargo deny check` passes; full-tree review updated in `docs/audit/licence-review.md` (2026-11-20). Open: owner decision on the Windows-only `windows-sys` exception (finding 1)
 - [ ] Final `cargo publish --dry-run` for all crates — core, data and compute pass; sim and cli fail until their upstream crates are on crates.io (expected). LICENSE-MIT, LICENSE-APACHE and NOTICE are now copied into all five publishable crates
@@ -314,7 +314,7 @@ Legend: `- [ ]` todo · `- [x]` done · **bold** = milestone
 
 ### 9b. User-facing features
 - [x] Expose full MD in TOML config (force field/bonded terms, thermostat, barostat, constraints, PME, minimise-first, checkpoint/restart); mirror in Python `run_simulation` with trajectory output
-- [ ] `tptdyn init <template>` scaffolding (lj-fluid, water-box, hep-analysis) — `lj-fluid` and `hep-analysis` are done; `water-box` is missing and needs an owner decision (see Phase 4 Examples)
+- [x] `tptdyn init <template>` scaffolding (lj-fluid, water-box, hep-analysis)
 - [x] `tptdyn validate CONFIG.toml` (semantic checks, "did you mean" for unknown keys, cost estimate, exit code 3)
 - [x] Live progress bar with ETA and ns/day (respects `-q` and non-TTY)
 - [x] `tptdyn report` / `simulate --report`: self-contained HTML run report (energy drift, T, P, RDF)

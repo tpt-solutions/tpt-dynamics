@@ -925,3 +925,22 @@ fn molecule_grid_requires_bonded_force_field_and_params() {
         .stderr(contains("params"));
 }
 
+#[test]
+fn water_box_template_validates_once_parameters_are_supplied() {
+    let dir = scratch("water-box-init");
+    tptdyn().args(["init", "water-box", dir.to_str().unwrap(), "--quiet"]).assert().success();
+    // Without water.toml the scaffold must fail with an input error that names it.
+    let cfg = dir.join("simulate.toml");
+    tptdyn()
+        .args(["validate", cfg.to_str().unwrap()])
+        .assert()
+        .code(3)
+        .stderr(contains("water.toml"));
+    // With a parameter file that has the SOL template, the whole config is consistent.
+    fs::write(dir.join("water.toml"), SYNTHETIC_WATER).unwrap();
+    tptdyn()
+        .args(["validate", cfg.to_str().unwrap()])
+        .assert()
+        .success()
+        .stdout(contains("atoms         1536"));
+}

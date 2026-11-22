@@ -6,6 +6,7 @@ data. Scripts run from any directory. Output files are written where you run the
 | Path | What it shows | How to run |
 | --- | --- | --- |
 | [`lj-fluid/lj-small.toml`](lj-fluid/) | A 64-atom Lennard-Jones run for `tptdyn simulate`, with its structure file `lj-64.gro` | `cd examples/lj-fluid && tptdyn simulate lj-small.toml --output-dir out` |
+| [`tptdyn init water-box`](../tpt-dynamics-cli/templates/water-box/) | 512 rigid three-site water molecules in a periodic box, with PME and SETTLE. The force field is not bundled: supply your own `water.toml` (see the template's README) | `tptdyn init water-box my-water && cd my-water`, then add `water.toml` and run `tptdyn validate simulate.toml` |
 | [`make_events.py`](make_events.py) | Writes a synthetic event CSV (`event,pt,eta,phi,weight`). Standard library only | `python examples/make_events.py -o events.csv` |
 | [`python_histogram.py`](python_histogram.py) | Fills a `Histogram1D` from a lazy-frame selection with the `tpt_dynamics` Python API | `python examples/python_histogram.py events.csv` |
 

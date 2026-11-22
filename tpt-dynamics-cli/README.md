@@ -24,6 +24,10 @@ Writes a runnable project from a built-in template. Templates:
 - `hep-analysis`: `make_events.py`, which writes a synthetic event CSV using only
   the Python standard library, plus `analyze.txt`, a command sheet of `analyze`
   and `histogram` examples.
+- `water-box`: a scaffold for 512 rigid three-site water molecules (an 8 x 8 x 8
+  grid, with the SETTLE molecule list written out). It writes `simulate.toml` and a
+  README, but no force field. tpt-dynamics does not bundle a third-party parameter
+  set, so you supply `water.toml` yourself, following that set's licence terms.
 
 `DIR` defaults to the current directory and is created if missing. No file is
 overwritten unless `--force` is given. If any target exists, nothing is written

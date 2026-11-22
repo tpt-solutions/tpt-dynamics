@@ -1,0 +1,47 @@
+# Rigid water in a periodic box: 512 molecules on an 8 x 8 x 8 grid, 0.31 nm apart.
+# Read README.txt first: water.toml is NOT included, because no parameter set is
+# bundled. Then run:
+#   tptdyn validate simulate.toml
+#   tptdyn simulate simulate.toml --report
+#
+# Units are MD units: nm, ps, amu, kJ/mol, K. Relative paths resolve against the
+# directory that contains this file.
+
+seed = 11
+dt = 0.001
+nsteps = 2000
+temperature = 300.0
+
+[system]
+# Copies of the molecule template SOL from water.toml, on the grid below. The box
+# is grid * spacing on each side.
+params = "water.toml"
+molecule = "SOL"
+grid = [8, 8, 8]
+spacing = 0.31     # nm
+
+[forcefield]
+kind = "bonded"
+electrostatics = "pme"
+pme_tolerance = 1e-5
+
+[neighbour]
+cutoff = 0.9       # nm; must stay below half the box (2.48 / 2 = 1.24 nm) with the skin
+skin = 0.1         # nm
+
+[thermostat]
+kind = "v-rescale"
+tau = 0.5          # ps
+
+[constraints]
+kind = "settle"
+water = "tip3p"
+# Atom indices [O, H1, H2] of each molecule, in grid order. The template must list
+# its atoms as O, H1, H2.
+molecules = [@MOLECULES@]
+
+[output]
+energy_interval = 100
+energy_file = "energy.csv"          # step,time,kinetic,potential,total,temperature,pressure
+trajectory_interval = 500
+trajectory_file = "traj.bin"

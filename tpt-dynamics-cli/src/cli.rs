@@ -124,6 +124,8 @@ pub(crate) enum Template {
     LjFluid,
     /// Synthetic event CSV generator plus an analyze/histogram command sheet.
     HepAnalysis,
+    /// 512 rigid three-site water molecules in a periodic box. Needs your own water.toml.
+    WaterBox,
 }
 
 /// Arguments of `tptdyn report`.
