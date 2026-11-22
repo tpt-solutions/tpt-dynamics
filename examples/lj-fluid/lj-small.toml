@@ -1,0 +1,31 @@
+# A small Lennard-Jones run for `tptdyn simulate`: 64 atoms, well under a second in release.
+# The same pattern as tpt-dynamics-sim/benchmarks/lj-10k-cli.toml, scaled down.
+#
+# Run from this directory (relative paths in the config resolve against this file):
+#   tptdyn simulate lj-small.toml --output-dir out
+#
+# Reduced Lennard-Jones units (sigma = epsilon = m = 1); the GRO file stores them as nm.
+# cutoff + skin must be below half the box length (4.23 nm / 2 = 2.12 nm).
+
+units = "reduced"
+seed = 1
+dt = 0.004
+nsteps = 2000
+temperature = 0.72
+integrator = "velocity-verlet"
+
+[system]
+structure = "lj-64.gro"
+
+[neighbour]
+cutoff = 1.8
+skin = 0.3
+
+[lennard_jones]
+epsilon = 1.0
+sigma = 1.0
+modifier = "shift"
+
+[output]
+energy_interval = 100
+energy_file = "lj-small-energy.csv"

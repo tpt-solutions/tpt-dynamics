@@ -20,12 +20,12 @@ commands from the repository root.
 | 6 | Zero-FFI: no `*-sys` crate in the normal tree | see section 3 | `zero-ffi` |
 | 7 | `no_std` build of the core | `cargo build -p tpt-dynamics-core --no-default-features --target thumbv7em-none-eabihf` | `no-std` |
 | 8 | MSRV (1.95) | `cargo +1.95 check --workspace --all-targets` | `msrv` |
-| 9 | Embedded demo | `cargo build --manifest-path embedded-demo/Cargo.toml --target thumbv7em-none-eabihf`, then `cargo test --manifest-path embedded-demo/Cargo.toml` | **not in CI yet** |
+| 9 | Embedded demo | `cargo build --manifest-path embedded-demo/Cargo.toml --target thumbv7em-none-eabihf`, then `cargo test --manifest-path embedded-demo/Cargo.toml` | `embedded-demo` (build only) |
 | 10 | Benchmark regression (25% limit) | `cargo run --release -p tpt-dynamics-data --example bench_json -- --check docs/benchmarks/baseline.json` | `bench-regression` (PRs) |
 | 11 | Python wheels: abi3 build for each target | `maturin build --release --out dist` in `bindings/tpt-dynamics-py` | `wheels` (`build`) |
 | 12 | Python tests against the built wheel | `python -m pytest bindings/tpt-dynamics-py/tests -q` | `wheels` (`test`) |
 | 13 | Source distribution | `maturin sdist --out dist` in `bindings/tpt-dynamics-py` | `wheels` (`sdist`) |
-| 14 | Documentation index builds | `python docs/site/build.py` | **not in CI yet** |
+| 14 | Documentation index builds and matches the committed `docs/site` | `python docs/site/build.py`, then `git diff --exit-code docs/site` | `docs-site` |
 
 Gate 3 runs on these runners: `ubuntu-latest` (x86_64), `ubuntu-24.04-arm` (aarch64),
 `windows-latest` (x86_64), `windows-11-arm` (aarch64, experimental: failures do not

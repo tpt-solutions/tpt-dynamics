@@ -116,5 +116,7 @@ give a readable form with the same schema checks.
   **not** Arrow-compatible, so files written by Arrow libraries will not load.
 - ROOT and RNTuple files cannot be read yet. Input is CSV, the project columnar format,
   or the Arrow-IPC-style format above.
-- The lazy data frame (`tpt_dynamics_data::lazy`) exists. Filling a histogram directly
-  from a lazy frame aggregation is not yet connected.
+- The lazy data frame (`tpt_dynamics_data::lazy`) can fill a histogram directly from
+  a plan. `LazyFrame::fill_histogram(&mut hist, x, weight)` runs the plan, applying
+  filters and projections first, and fills `hist` from the resulting `x` column
+  (and the optional weight column). The doc example in `lazy/fill.rs` shows the call.

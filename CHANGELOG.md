@@ -17,13 +17,23 @@ the project uses [Semantic Versioning](https://semver.org/) once it reaches 0.1.
 - `tpt-dynamics-data`: `Histogram1D` with fixed and variable binning, under- and
   overflow, weights, sum of squared weights, mean, standard deviation, quantiles,
   and merging.
-- `tptdyn` binary with `--help` and `--version` (other subcommands are not yet
-  implemented).
+- `tptdyn` binary with `--help`, `--version`, `simulate`, `analyze`, `histogram`,
+  shell completions and man pages.
 - Licence files (MIT and Apache-2.0), `deny.toml` with the project licence policy,
   and the dependency audit in `docs/dependencies.md`.
 - Architecture decision records ADR-001 to ADR-006 in `docs/adr/`.
 - Continuous integration: formatting, clippy, tests on three operating systems,
   documentation build, `cargo deny`, `no_std` build, and an MSRV job.
+
+### Added (Phase 9 adoption and fixes, unreleased)
+
+- `release.yml`: tag-triggered builds of `tptdyn` for four targets, packaged with checksums into a draft GitHub Release. The crates.io and PyPI publish jobs are manual and approval-gated.
+- `install.sh` and `install.ps1` (verify SHA-256 before installing), and draft Homebrew and winget manifests in `packaging/`. The installers work after the first release.
+- Root `README.md` rewritten, with a quickstart and `examples/` (a small LJ run, a CSV generator and a Python histogram script).
+- `.devcontainer/`, a multi-stage `Dockerfile` and `.dockerignore`. CI builds `embedded-demo` and the Docker image.
+- `docs-site.yml`: checks that `docs/site` is up to date and deploys it to GitHub Pages from `master`.
+- Criterion benchmark harness for `tpt-dynamics-data` (`cargo bench -p tpt-dynamics-data`), covering 1D histogram filling.
+- `SECURITY.md` and `CODE_OF_CONDUCT.md` added. The debug `.pdb` file is no longer tracked.
 
 ### Added (Phases 1–8 implementation pass, unreleased)
 
