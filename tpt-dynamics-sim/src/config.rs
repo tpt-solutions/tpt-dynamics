@@ -43,6 +43,7 @@ use crate::barostat::{Barostat, BAR_PER_MD_PRESSURE};
 use crate::error::SimError;
 use crate::forcefield::{LennardJones, LjType, Modifier};
 use crate::integrator::{ForceEvaluator, Integrator, LeapFrog, VelocityVerlet};
+use crate::output::sink::FrameSinkObserver;
 use crate::output::{EnergyLogger, Observer, TrajectoryWriter};
 use crate::simulation::Simulation;
 use crate::system::{System, UnitSystem};
@@ -187,7 +188,24 @@ pub struct OutputConfig {
     pub trajectory_interval: Option<u64>,
     /// Trajectory file (binary, see [`crate::output`]).
     pub trajectory_file: Option<PathBuf>,
+    /// On-disk trajectory format: `"plain"` (default, see [`crate::output`]) or
+    /// `"chunked"` (compressed, single-precision, from `tpt-dynamics-data`).
+    pub trajectory_format: TrajectoryFormat,
 }
+
+/// Trajectory file format selection.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum TrajectoryFormat {
+    /// The simple `TPTTRJ01` format written by [`crate::output::TrajectoryWriter`].
+    #[default]
+    Plain,
+    /// The chunked `TPTCTRJ1` format from `tpt-dynamics-data`, streamed during the run.
+    Chunked,
+}
+
+/// Frames per chunk for the chunked trajectory format.
+const CHUNK_FRAMES: u32 = 64;
 
 /// Complete run configuration.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -355,7 +373,21 @@ impl SimConfig {
             (self.output.trajectory_interval, &self.output.trajectory_file)
         {
             let w = BufWriter::new(File::create(path)?);
-            out.push(Box::new(TrajectoryWriter::new(w, n_atoms, every)?));
+            match self.output.trajectory_format {
+                TrajectoryFormat::Plain => {
+                    out.push(Box::new(TrajectoryWriter::new(w, n_atoms, every)?));
+                }
+                TrajectoryFormat::Chunked => {
+                    let sink = tpt_dynamics_data::trajectory::TrajectoryWriter::new(
+                        w,
+                        n_atoms,
+                        tpt_dynamics_data::trajectory::Precision::F32,
+                        CHUNK_FRAMES,
+                    )
+                    .map_err(|e| SimError::Invalid(format!("trajectory sink: {e}")))?;
+                    out.push(Box::new(FrameSinkObserver::new(sink, n_atoms, every)));
+                }
+            }
         }
         Ok(out)
     }

@@ -338,6 +338,35 @@ fn simulate_writes_energy_log_and_trajectory() {
     assert_eq!(traj.frames.len(), 6);
 }
 
+/// `simulate` output must be readable by `analyze --trajectory` (both formats).
+#[test]
+fn simulate_output_round_trips_through_analyze() {
+    for format in ["plain", "chunked"] {
+        let dir = scratch(&format!("roundtrip-{format}"));
+        let cfg = tiny_config(&dir, "0.002", "");
+        if format == "chunked" {
+            let text = fs::read_to_string(&cfg).unwrap();
+            let text = text.replace(
+                "trajectory_file = \"traj.bin\"",
+                "trajectory_file = \"traj.bin\"\ntrajectory_format = \"chunked\"",
+            );
+            fs::write(&cfg, text).unwrap();
+        }
+        tptdyn().args(["simulate", cfg.to_str().unwrap(), "--quiet"]).assert().success();
+
+        let out = dir.join("analysis.csv");
+        tptdyn()
+            .args(["analyze", "--trajectory", dir.join("traj.bin").to_str().unwrap()])
+            .args(["--out", out.to_str().unwrap()])
+            .assert()
+            .success();
+        let rows = read_traj_csv(&out);
+        assert_eq!(rows.len(), 6, "{format}: one row per output frame");
+        // Superposition rounding leaves a tiny residual, as in the rigid-motion test.
+        assert!(rows[0].0.abs() < 1e-6, "{format}: first frame rmsd {}", rows[0].0);
+    }
+}
+
 #[test]
 fn simulate_output_dir_redirects_outputs() {
     let dir = scratch("simulate_outdir");

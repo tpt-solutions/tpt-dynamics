@@ -303,8 +303,8 @@ Legend: `- [ ]` todo · `- [x]` done · **bold** = milestone
 
 ### 9a. Fixes and drift
 - [x] Commit `sim/src/output/sink.rs` and anchor the `.gitignore` `output/` rule (clean checkouts failed to build)
-- [ ] Fix `simulate` -> `analyze --trajectory` format mismatch: add `output.trajectory_format = "plain" | "chunked"` (default chunked, via `FrameSinkObserver`); `traj_analysis.rs` sniffs magic and falls back to the plain reader
-- [ ] CLI end-to-end test: `simulate` then `analyze --trajectory` on its own output
+- [x] Fix `simulate` -> `analyze --trajectory` format mismatch: `analyze` detects the format from magic bytes; opt-in `output.trajectory_format = "chunked"` streams via `FrameSinkObserver` (default stays `"plain"` for compatibility)
+- [x] CLI end-to-end test: `simulate` then `analyze --trajectory` on both formats (`simulate_output_round_trips_through_analyze`)
 - [ ] Untrack `bindings/tpt-dynamics-py/python/tpt_dynamics/_tpt_dynamics.pdb` and ignore `*.pdb` build artefacts
 - [ ] Add the missing `SECURITY.md` and `CODE_OF_CONDUCT.md` (Phase 0 marks them done but they do not exist)
 - [ ] Refresh stale docs: root `README.md`, `tpt-dynamics-data/README.md`, `CHANGELOG.md` ("other subcommands not yet implemented"), `docs/tutorials/hep-analysis.md` (lazy fill is connected), comment in `tpt-dynamics-data/tests/distributed_merge.rs`, `tpt-dynamics-sim/src/lib.rs` (barostat list, "placeholder")
