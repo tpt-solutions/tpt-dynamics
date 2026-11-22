@@ -17,7 +17,7 @@ jobs:
     name: timing probe vs baseline
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Run probe and compare with baseline
@@ -26,7 +26,7 @@ jobs:
           --out bench-current.json --check docs/benchmarks/baseline.json
       - name: Upload current timings
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: bench-current
           path: bench-current.json

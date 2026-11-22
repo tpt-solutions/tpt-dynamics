@@ -46,7 +46,7 @@ jobs:
           - os: macos-latest
             rust_target: aarch64-apple-darwin
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -61,7 +61,7 @@ jobs:
           manylinux: auto
           working-directory: bindings/tpt-dynamics-py
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: wheels-${{ matrix.os }}-${{ matrix.rust_target }}
           path: bindings/tpt-dynamics-py/dist/*.whl
@@ -71,7 +71,7 @@ jobs:
     name: source distribution
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -82,7 +82,7 @@ jobs:
           args: --out dist
           working-directory: bindings/tpt-dynamics-py
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: sdist
           path: bindings/tpt-dynamics-py/dist/*.tar.gz
@@ -98,13 +98,13 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
         python: ["3.11", "3.13"]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python }}
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: wheels-${{ matrix.os }}-*
           path: dist
