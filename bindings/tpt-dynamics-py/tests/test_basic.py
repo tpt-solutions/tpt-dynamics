@@ -325,6 +325,26 @@ def test_run_simulation_minimize_and_checkpoint_restart(tmp_path: Path) -> None:
     assert resumed["total"][0] == pytest.approx(first["total"][-1], rel=1e-9)
 
 
+def test_run_simulation_writes_configured_output_files(tmp_path: Path) -> None:
+    traj = tmp_path / "traj.bin"
+    energy = tmp_path / "energy.csv"
+    config = (
+        MD_CONFIG
+        + "\n[output]\n"
+        + "energy_interval = 5\n"
+        + f'energy_file = "{energy.as_posix()}"\n'
+        + "trajectory_interval = 10\n"
+        + f'trajectory_file = "{traj.as_posix()}"\n'
+    )
+    td.run_simulation(config, _lattice_gro(), format="gro")
+
+    # Energy rows at steps 0, 5, 10, 15, 20 plus the header line.
+    rows = energy.read_text().strip().splitlines()
+    assert len(rows) == 1 + 5
+    # Trajectory frames at steps 0, 10, 20 must have been written.
+    assert traj.stat().st_size > 0
+
+
 def test_run_simulation_new_option_errors(tmp_path: Path) -> None:
     gro = _lattice_gro()
     with pytest.raises(ValueError):

@@ -7,11 +7,23 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use tpt_dynamics_sim::config::SimConfig;
-use tpt_dynamics_sim::output::Energies;
+use tpt_dynamics_sim::output::{Energies, Observation, Observer};
+use tpt_dynamics_sim::simulation::Simulation;
 use tpt_dynamics_sim::{gro, pdb};
 
 use crate::convert::f64_array;
 use crate::errors::{sim_err, value_err};
+
+/// Sends the current state to every observer that is due at the current step.
+fn emit_observers(sim: &Simulation, observers: &mut [Box<dyn Observer>]) -> PyResult<()> {
+    let obs = Observation { system: &sim.system, energies: sim.energies() };
+    for o in observers {
+        if sim.step.is_multiple_of(o.interval().max(1)) {
+            o.observe(&obs).map_err(sim_err)?;
+        }
+    }
+    Ok(())
+}
 
 /// Parses and validates a TOML run configuration.
 ///
@@ -85,12 +97,19 @@ pub(crate) fn run_simulation<'py>(
     };
     let mut sim = cfg.build_simulation(system).map_err(sim_err)?;
 
+    // Energy and trajectory files named in `[output]` are written as in the CLI.
+    let mut observers = cfg.open_observers(sim.system.len()).map_err(sim_err)?;
     let mut samples: Vec<Energies> = vec![sim.energies()];
+    emit_observers(&sim, &mut observers)?;
     for _ in 0..cfg.nsteps {
         sim.advance().map_err(sim_err)?;
+        emit_observers(&sim, &mut observers)?;
         if sim.step % sample_every == 0 {
             samples.push(sim.energies());
         }
+    }
+    for o in &mut observers {
+        o.finish().map_err(sim_err)?;
     }
 
     cfg.write_checkpoint(&mut sim).map_err(sim_err)?;

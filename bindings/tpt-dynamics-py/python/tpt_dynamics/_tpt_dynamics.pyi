@@ -339,5 +339,10 @@ def run_simulation(
     `minimize` sets `[minimize] enabled`; `checkpoint_restart` restores the
     state from that file before the run (sampling then starts at the
     checkpoint's step); `checkpoint_write` writes the final state to that file.
+
+    The `[output]` table is honoured as in `tptdyn simulate`: `energy_file` and
+    `trajectory_file` are written at their configured intervals (paths are
+    relative to the working directory). The returned arrays are sampled
+    separately and are not read back from those files.
     """
     ...
