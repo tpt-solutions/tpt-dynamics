@@ -9,6 +9,8 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 readme = "README.md"
+keywords = ["molecular-dynamics", "simd", "ewald", "pme", "fft"]
+categories = ["science::computational-chemistry::molecular-simulation", "mathematics", "science"]
 publish = true
 
 [dependencies]

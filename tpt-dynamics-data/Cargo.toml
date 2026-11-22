@@ -8,6 +8,8 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 readme = "README.md"
+keywords = ["histogram", "physics", "columnar", "dataframe", "hep"]
+categories = ["science", "data-structures", "encoding"]
 publish = true
 
 [features]

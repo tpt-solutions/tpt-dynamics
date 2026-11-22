@@ -8,6 +8,8 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 readme = "README.md"
+keywords = ["cli", "molecular-dynamics", "histogram", "analysis", "simulation"]
+categories = ["command-line-utilities", "science", "simulation"]
 publish = true
 
 [[bin]]

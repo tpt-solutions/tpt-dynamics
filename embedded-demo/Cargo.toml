@@ -1,6 +1,9 @@
 [package]
 name = "embedded-demo"
 description = "Fixed-point event-stream filter for a DAQ front end, built on the no_std tpt-dynamics-core."
+readme = "README.md"
+keywords = ["daq", "fixed-point", "no-std", "embedded", "detector"]
+categories = ["embedded", "no-std", "science"]
 version = "0.1.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"

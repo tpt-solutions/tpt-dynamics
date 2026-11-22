@@ -8,11 +8,13 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 readme = "README.md"
+keywords = ["physics", "units", "constants", "no-std", "vector"]
+categories = ["no-std", "science", "mathematics"]
 publish = true
 
 [features]
 default = []
-# Enables std-only conveniences (currently: `std::error::Error` impls).
+# Reserved for std-only conveniences. Currently empty: enabling it changes nothing.
 std = []
 
 [dependencies]

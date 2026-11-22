@@ -8,6 +8,8 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 readme = "README.md"
+keywords = ["molecular-dynamics", "gromacs", "md", "pdb", "simulation"]
+categories = ["science::computational-chemistry::molecular-simulation", "science", "simulation"]
 publish = true
 
 [dependencies]

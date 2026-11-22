@@ -8,6 +8,8 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 readme = "README.md"
+keywords = ["python", "pyo3", "numpy", "histogram", "molecular-dynamics"]
+categories = ["api-bindings", "science"]
 # Not published to crates.io; ships to PyPI via maturin (todo.md Phase 4).
 publish = false
 
