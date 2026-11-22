@@ -34,7 +34,7 @@ Thumbs.db
 *.tpr
 *.zarr/
 data/
-output/
+/output/
 
 # Misc
 .env
