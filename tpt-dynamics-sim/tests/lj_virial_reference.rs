@@ -87,6 +87,7 @@ fn low_density_pressure_matches_second_virial_theory() {
     let b2 = second_virial_b2(&ff, t);
 
     let sys = fcc_system(cells, density, t, 2024);
+    let sys_len = sys.len();
     let eval = ForceEvaluator::new(Box::new(ff), 0.3).unwrap();
     let thermostat = Berendsen::new(t, 0.1, UnitSystem::Reduced).unwrap();
     let mut sim = Simulation::new(
@@ -126,7 +127,11 @@ fn low_density_pressure_matches_second_virial_theory() {
     // Compare the second-virial term P/(rho T) - 1 directly. Its size is about 3.6%
     // of P at this density, so a 10% tolerance tests B2 to a few per cent.
     let measured_term = measured / (density * t) - 1.0;
-    let predicted_term = b2 * density;
+    // The kinetic term of the pressure estimator uses the centre-of-mass-free
+    // kinetic energy, `(3N - 3) k_B T / 2`, so the ideal part of `P / (rho T)` is
+    // `(N - 1) / N` rather than 1. That shifts the measured term by `-1/N`.
+    let n_atoms = sys_len as f64;
+    let predicted_term = b2 * density - 1.0 / n_atoms;
     let stderr_term = stderr_p / (density * t);
     eprintln!(
         "B2 = {b2:.5}, B2 rho = {predicted_term:.5}, measured = {measured_term:.5} +/- {stderr_term:.5} (block SE)"
