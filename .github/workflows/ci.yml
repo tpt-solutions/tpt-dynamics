@@ -30,6 +30,7 @@ jobs:
         with:
           components: clippy
       - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo clippy -p tpt-dynamics-data --all-targets --features mmap -- -D warnings
 
   test:
     name: test (${{ matrix.os }}, ${{ matrix.arch }})
@@ -61,6 +62,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo test --workspace
       - run: cargo test -p tpt-dynamics-data --features parquet
+      - run: cargo test -p tpt-dynamics-data --features mmap
 
   doc:
     name: rustdoc
