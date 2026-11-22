@@ -1,0 +1,251 @@
+# Release pipeline for tptdyn.
+#
+# What runs automatically:
+#   * On a tag push matching v* and on workflow_dispatch: build the tptdyn CLI for
+#     four targets, package each with the licence files, write a .sha256 file, and
+#     create a DRAFT GitHub Release with the archives attached. A person must review
+#     the draft and publish it by hand.
+#
+# What is gated:
+#   * The crates.io and PyPI publish jobs run only on workflow_dispatch with the
+#     `publish` input set to true, and only after approval of the `release`
+#     environment. They must NOT be run until the owner approves per
+#     docs/release-checklist.md. Nothing in this file publishes on a tag push.
+#
+# Action versions follow .github/workflows/ci.yml and wheels.yml. The Rust toolchain
+# comes from dtolnay/rust-toolchain@stable, as in ci.yml. rust-toolchain.toml sets the
+# channel for local builds, and the MSRV job in ci.yml checks 1.95.
+
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish to crates.io and PyPI (owner approval required; see docs/release-checklist.md)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  version:
+    name: read workspace version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: v
+        run: |
+          version=$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Workspace version: $version"
+
+  build:
+    name: build ${{ matrix.target }}
+    needs: version
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+            archive: tar.gz
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            archive: tar.gz
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            archive: tar.gz
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            archive: zip
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      TARGET: ${{ matrix.target }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      # Native builds on each runner, so no cross-compilation tool is needed.
+      - name: Build tptdyn (release)
+        run: cargo build --release --locked -p tpt-dynamics-cli --target "$TARGET"
+
+      - name: Package (unix)
+        if: matrix.archive == 'tar.gz'
+        shell: bash
+        run: |
+          set -euo pipefail
+          name="tptdyn-v${VERSION}-${TARGET}"
+          stage="$RUNNER_TEMP/$name"
+          mkdir -p "$stage"
+          cp "target/${TARGET}/release/tptdyn" "$stage/"
+          cp LICENSE-MIT LICENSE-APACHE NOTICE README.md "$stage/"
+          tar -C "$RUNNER_TEMP" -czf "$name.tar.gz" "$name"
+          if command -v sha256sum >/dev/null; then
+            sha256sum "$name.tar.gz" > "$name.tar.gz.sha256"
+          else
+            shasum -a 256 "$name.tar.gz" > "$name.tar.gz.sha256"
+          fi
+          cat "$name.tar.gz.sha256"
+
+      - name: Package (windows)
+        if: matrix.archive == 'zip'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $name = "tptdyn-v$env:VERSION-$env:TARGET"
+          $stage = Join-Path $env:RUNNER_TEMP $name
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+          Copy-Item "target/$env:TARGET/release/tptdyn.exe" $stage
+          Copy-Item LICENSE-MIT, LICENSE-APACHE, NOTICE, README.md $stage
+          Compress-Archive -Path $stage -DestinationPath "$name.zip" -Force
+          $hash = (Get-FileHash -Algorithm SHA256 "$name.zip").Hash.ToLower()
+          "$hash  $name.zip" | Set-Content -Encoding ascii "$name.zip.sha256"
+          Get-Content "$name.zip.sha256"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: tptdyn-${{ matrix.target }}
+          path: tptdyn-v${{ needs.version.outputs.version }}-${{ matrix.target }}.*
+          if-no-files-found: error
+
+  draft-release:
+    name: draft GitHub Release
+    needs: [version, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: v${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: tptdyn-*
+          path: dist
+          merge-multiple: true
+
+      # Creates a draft only. A person publishes the draft after review.
+      - name: Create or update the draft release
+        run: |
+          set -euo pipefail
+          ls -la dist
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --clobber
+          else
+            gh release create "$TAG" dist/* --draft \
+              --title "tptdyn $TAG" \
+              --notes "Prebuilt tptdyn binaries. Each archive has a matching .sha256 file. See CHANGELOG.md for changes."
+          fi
+
+  # ---------------------------------------------------------------------------
+  # Publish jobs. Gated by: manual dispatch, publish=true, and approval of the
+  # `release` environment. Do not run until the owner approves per
+  # docs/release-checklist.md.
+  # ---------------------------------------------------------------------------
+
+  publish-crates:
+    name: publish crates to crates.io
+    needs: [version, build]
+    if: github.event_name == 'workflow_dispatch' && inputs.publish == true
+    environment: release
+    runs-on: ubuntu-latest
+    env:
+      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      # Dependency order: each crate is published after the crates it depends on.
+      - run: cargo publish --locked -p tpt-dynamics-core
+      - run: cargo publish --locked -p tpt-dynamics-data
+      - run: cargo publish --locked -p tpt-dynamics-compute
+      - run: cargo publish --locked -p tpt-dynamics-sim
+      - run: cargo publish --locked -p tpt-dynamics-cli
+
+  pypi-build:
+    name: PyPI wheel (${{ matrix.rust_target }})
+    needs: version
+    if: github.event_name == 'workflow_dispatch' && inputs.publish == true
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            rust_target: x86_64-unknown-linux-gnu
+          - os: ubuntu-24.04-arm
+            rust_target: aarch64-unknown-linux-gnu
+          - os: windows-latest
+            rust_target: x86_64-pc-windows-msvc
+          - os: macos-latest
+            rust_target: aarch64-apple-darwin
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_target }}
+      - uses: PyO3/maturin-action@v1
+        with:
+          command: build
+          args: --release --out dist
+          target: ${{ matrix.rust_target }}
+          manylinux: auto
+          working-directory: bindings/tpt-dynamics-py
+      - uses: actions/upload-artifact@v7
+        with:
+          name: pypi-wheels-${{ matrix.rust_target }}
+          path: bindings/tpt-dynamics-py/dist/*.whl
+          if-no-files-found: error
+
+  pypi-sdist:
+    name: PyPI sdist
+    needs: version
+    if: github.event_name == 'workflow_dispatch' && inputs.publish == true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: PyO3/maturin-action@v1
+        with:
+          command: sdist
+          args: --out dist
+          working-directory: bindings/tpt-dynamics-py
+      - uses: actions/upload-artifact@v7
+        with:
+          name: pypi-sdist
+          path: bindings/tpt-dynamics-py/dist/*.tar.gz
+          if-no-files-found: error
+
+  publish-pypi:
+    name: publish to PyPI
+    needs: [pypi-build, pypi-sdist]
+    if: github.event_name == 'workflow_dispatch' && inputs.publish == true
+    environment: release
+    runs-on: ubuntu-latest
+    # Trusted publishing (OIDC) to PyPI: no long-lived token is stored in the repository.
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: pypi-*
+          path: dist
+          merge-multiple: true
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist

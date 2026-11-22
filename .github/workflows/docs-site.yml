@@ -1,0 +1,81 @@
+name: Docs site
+
+# Rebuilds the static documentation index (docs/site) from the Markdown sources and
+# fails if the committed HTML is out of date. On push to master the built site is
+# deployed to GitHub Pages. Nothing else is published.
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "docs/**"
+      - "README.md"
+      - "CHANGELOG.md"
+      - "CONTRIBUTING.md"
+      - ".github/workflows/docs-site.yml"
+  pull_request:
+    paths:
+      - "docs/**"
+      - "README.md"
+      - "CHANGELOG.md"
+      - "CONTRIBUTING.md"
+      - ".github/workflows/docs-site.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: build and check docs/site
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      - name: Regenerate docs/site
+        run: python docs/site/build.py
+
+      # Fail on drift: the committed HTML must match what build.py produces. Untracked
+      # files are checked too, because `git diff` does not list them.
+      - name: Fail if docs/site is out of date
+        run: |
+          set -euo pipefail
+          if ! git diff --exit-code docs/site; then
+            echo "docs/site differs from the Markdown sources. Run: python docs/site/build.py" >&2
+            exit 1
+          fi
+          untracked=$(git ls-files --others --exclude-standard docs/site)
+          if [ -n "$untracked" ]; then
+            echo "Untracked files in docs/site:" >&2
+            echo "$untracked" >&2
+            exit 1
+          fi
+
+      - name: Upload the Pages artifact
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: docs/site
+
+  deploy:
+    name: deploy to GitHub Pages
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      pages: write
+      id-token: write
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

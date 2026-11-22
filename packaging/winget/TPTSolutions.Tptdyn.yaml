@@ -1,0 +1,6 @@
+# TEMPLATE. Not for submission. Replace every PLACEHOLDER with the release values.
+PackageIdentifier: TPTSolutions.Tptdyn
+PackageVersion: PLACEHOLDER_VERSION
+DefaultLocale: en-US
+ManifestType: version
+ManifestVersion: 1.6.0

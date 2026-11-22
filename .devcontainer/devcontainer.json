@@ -1,0 +1,20 @@
+{
+  "name": "tpt-dynamics",
+  "image": "mcr.microsoft.com/devcontainers/rust:1",
+  "features": {
+    "ghcr.io/devcontainers/features/python:1": {
+      "version": "3.11"
+    }
+  },
+  "postCreateCommand": "python3 -m pip install --user maturin pytest && rustup component add rustfmt clippy",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "rust-lang.rust-analyzer",
+        "tamasfe.even-better-toml",
+        "ms-python.python"
+      ]
+    }
+  },
+  "remoteUser": "vscode"
+}

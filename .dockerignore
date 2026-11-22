@@ -1,0 +1,23 @@
+# Keep the build context small. vendor/ is deliberately NOT listed here: the workspace
+# patches target-lexicon from vendor/target-lexicon-mit, so the build needs it.
+.git
+.github
+target/
+**/target/
+data/
+*.csv
+*.parquet
+*.root
+*.xtc
+*.trr
+*.tpr
+*.zarr/
+*.pdb
+__pycache__/
+.venv/
+.pytest_cache/
+.mypy_cache/
+dist/
+docs/site/
+embedded-demo/target/
+.devcontainer/

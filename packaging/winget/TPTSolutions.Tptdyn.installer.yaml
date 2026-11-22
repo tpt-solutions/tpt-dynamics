@@ -1,0 +1,15 @@
+# TEMPLATE. Not for submission. Replace every PLACEHOLDER with the release values.
+# A zip archive is installed as a portable package: the exe is registered as a command.
+PackageIdentifier: TPTSolutions.Tptdyn
+PackageVersion: PLACEHOLDER_VERSION
+InstallerType: zip
+NestedInstallerType: portable
+NestedInstallerFiles:
+  - RelativeFilePath: tptdyn-vPLACEHOLDER_VERSION-x86_64-pc-windows-msvc\tptdyn.exe
+    PortableCommandAlias: tptdyn
+Installers:
+  - Architecture: x64
+    InstallerUrl: https://github.com/tpt-solutions/tpt-dynamics/releases/download/vPLACEHOLDER_VERSION/tptdyn-vPLACEHOLDER_VERSION-x86_64-pc-windows-msvc.zip
+    InstallerSha256: PLACEHOLDER_SHA256_X86_64_PC_WINDOWS_MSVC
+ManifestType: installer
+ManifestVersion: 1.6.0

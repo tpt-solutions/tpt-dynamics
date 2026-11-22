@@ -1,0 +1,12 @@
+# TEMPLATE. Not for submission. Replace every PLACEHOLDER with the release values.
+PackageIdentifier: TPTSolutions.Tptdyn
+PackageVersion: PLACEHOLDER_VERSION
+PackageLocale: en-US
+Publisher: TPT Solutions
+PublisherUrl: https://github.com/tpt-solutions
+PackageName: tptdyn
+PackageUrl: https://github.com/tpt-solutions/tpt-dynamics
+License: MIT OR Apache-2.0
+ShortDescription: Command-line tool for tpt-dynamics molecular dynamics and data analysis.
+ManifestType: defaultLocale
+ManifestVersion: 1.6.0
