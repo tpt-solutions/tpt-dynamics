@@ -17,8 +17,6 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  EVENTS_CSV: ${{ runner.temp }}/events-10gb.csv
-  ANALYSIS_DIR: ${{ runner.temp }}/analysis-10gb
 
 jobs:
   large-benchmark:
@@ -41,16 +39,16 @@ jobs:
 
       - name: Generate the 10 GB event CSV
         run: |
-          ./target/release/examples/generate_events --events 27300000 --seed 42 --out "$EVENTS_CSV"
-          size=$(stat -c %s "$EVENTS_CSV")
+          ./target/release/examples/generate_events --events 27300000 --seed 42 --out "$RUNNER_TEMP/events-10gb.csv"
+          size=$(stat -c %s "$RUNNER_TEMP/events-10gb.csv")
           echo "CSV size: $size bytes"
           test "$size" -eq 10488817642
 
       - name: tptdyn analyze (timed)
         run: |
           start=$(date +%s.%N)
-          ./target/release/tptdyn analyze "$EVENTS_CSV" --filter "pt > 5" \
-            --hist pt,100,0,100 --hist eta,100,-5,5 --out-dir "$ANALYSIS_DIR" \
+          ./target/release/tptdyn analyze "$RUNNER_TEMP/events-10gb.csv" --filter "pt > 5" \
+            --hist pt,100,0,100 --hist eta,100,-5,5 --out-dir "$RUNNER_TEMP/analysis-10gb" \
             > tptdyn-analyze.txt 2>&1
           end=$(date +%s.%N)
           echo "tptdyn_wall_s=$(python3 -c "print(round($end-$start,1))")" | tee -a tptdyn-analyze.txt
@@ -65,7 +63,7 @@ jobs:
       - name: ROOT RDataFrame (1 thread, then 4 threads)
         run: |
           for t in 1 4; do
-            "$HOME/root-env/bin/python" docs/benchmarks/scripts/root_analyze.py "$EVENTS_CSV" "$t" \
+            "$HOME/root-env/bin/python" docs/benchmarks/scripts/root_analyze.py "$RUNNER_TEMP/events-10gb.csv" "$t" \
               | tee -a root-rdf.txt
           done
 
