@@ -1,8 +1,10 @@
 //! `tptdyn`: unified command-line tool for tpt-dynamics.
 //!
-//! Subcommands: `simulate` (MD engine), `analyze` (CSV summaries, filters and
-//! histograms), `histogram` (1D histogram from one CSV column), `completions`
-//! and `man`. Exit codes are documented in `tptdyn --help` and in the README.
+//! Subcommands: `init` (project templates), `validate` (check a simulation config),
+//! `simulate` (MD engine), `report` (HTML report of a run), `analyze` (summaries,
+//! filters and histograms of CSV, Parquet or tptdyn binary tables), `histogram`
+//! (1D histogram from one CSV column), `completions` and `man`. Exit codes are
+//! documented in `tptdyn --help` and in the README.
 
 #![forbid(unsafe_code)]
 
@@ -10,10 +12,16 @@ mod analyze;
 mod cli;
 mod csvin;
 mod error;
+mod expr;
 mod histogram;
+mod init;
 mod logger;
+mod progress;
+mod report;
 mod simulate;
+mod table;
 mod traj_analysis;
+mod validate;
 
 use std::fs;
 use std::io::{self, Write};
@@ -73,8 +81,11 @@ fn run(cli: Cli) -> Result<(), CliError> {
     match cli.command {
         Command::Simulate(args) => {
             let out = args.output_dir.or(defaults.output_dir);
-            simulate::run(&args.sim_config, out.as_deref(), quiet)
+            simulate::run(&args.sim_config, out.as_deref(), quiet, args.report)
         }
+        Command::Validate(args) => validate::run(&args.sim_config),
+        Command::Init(args) => init::run(&args, quiet),
+        Command::Report(args) => report::run(&args, quiet),
         Command::Analyze(args) => analyze::run(&args, quiet),
         Command::Histogram(args) => histogram::run(&args, quiet),
         Command::Completions { shell } => {

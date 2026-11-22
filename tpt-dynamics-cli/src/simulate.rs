@@ -31,10 +31,20 @@ use tpt_dynamics_sim::simulation::{RunSummary, Simulation};
 use tpt_dynamics_sim::system::{NewAtom, System};
 
 use crate::error::{input, sim_err, usage, CliError};
+use crate::progress::{self, ProgressObserver};
+use crate::report;
+
+/// A parsed configuration: where the starting system comes from, and the engine settings.
+pub(crate) struct Loaded {
+    /// The `[system]` table.
+    pub(crate) spec: SystemSpec,
+    /// Everything else, as the engine's configuration.
+    pub(crate) cfg: SimConfig,
+}
 
 /// Where the starting system comes from.
 #[derive(Debug, PartialEq)]
-enum SystemSpec {
+pub(crate) enum SystemSpec {
     /// A `.gro` or `.pdb` structure file.
     Structure(PathBuf),
     /// A simple cubic lattice of identical atoms.
@@ -52,29 +62,24 @@ pub(crate) fn run(
     config_path: &Path,
     output_dir: Option<&Path>,
     quiet: bool,
+    write_report: bool,
 ) -> Result<(), CliError> {
-    let shown = config_path.display();
-    let text = fs::read_to_string(config_path)
-        .map_err(|e| input(format!("cannot read config '{shown}': {e}")))?;
-    let base = config_path
-        .parent()
-        .filter(|p| !p.as_os_str().is_empty())
-        .unwrap_or_else(|| Path::new("."));
-
-    let mut table: toml::Table =
-        text.parse().map_err(|e| input(format!("config '{shown}': {e}")))?;
-    let spec = take_system(&mut table, base)?;
-    resolve_outputs(&mut table, base, output_dir)?;
-    let cfg_text = toml::to_string(&table).map_err(|e| input(format!("config '{shown}': {e}")))?;
-    let cfg =
-        SimConfig::from_toml_str(&cfg_text).map_err(|e| input(format!("config '{shown}': {e}")))?;
+    let Loaded { spec, cfg } = load_config(config_path, output_dir)?;
+    if write_report && cfg.output.energy_file.is_none() {
+        return Err(input("--report needs [output] energy_file to be set"));
+    }
 
     let system = build_system(&spec)?;
     let mut sim = cfg.build_simulation(system).map_err(sim_err)?;
     let mut observers = cfg.open_observers(sim.system.len()).map_err(sim_err)?;
+    // A live progress line replaces the plain 10% lines when stderr is a terminal.
+    let live = progress::should_show(quiet);
+    if live {
+        observers.push(Box::new(ProgressObserver::new(cfg.nsteps)));
+    }
     log::info!("simulating {} atoms for {} steps", sim.system.len(), cfg.nsteps);
 
-    let summary = integrate(&mut sim, &mut observers, cfg.nsteps, quiet)?;
+    let summary = integrate(&mut sim, &mut observers, cfg.nsteps, !quiet && !live)?;
     if let Some(path) = &cfg.output.energy_file {
         log::info!("energy log written to {}", path.display());
     }
@@ -90,7 +95,44 @@ pub(crate) fn run(
             summary.relative_energy_drift()
         );
     }
+    if let Some(energy) = &cfg.output.energy_file {
+        if write_report {
+            let dir =
+                energy.parent().filter(|p| !p.as_os_str().is_empty()).unwrap_or(Path::new("."));
+            let out = dir.join("report.html");
+            report::write_report(energy, cfg.output.trajectory_file.as_deref(), &out)?;
+            if !quiet {
+                eprintln!("report written to {}", out.display());
+            }
+        }
+    }
     Ok(())
+}
+
+/// Reads and parses a simulation configuration, without building anything.
+///
+/// Output file names are redirected into `output_dir` when given. Errors are input
+/// errors whose message starts with the file name.
+pub(crate) fn load_config(
+    config_path: &Path,
+    output_dir: Option<&Path>,
+) -> Result<Loaded, CliError> {
+    let shown = config_path.display();
+    let text = fs::read_to_string(config_path)
+        .map_err(|e| input(format!("cannot read config '{shown}': {e}")))?;
+    let base = config_path
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+
+    let mut table: toml::Table =
+        text.parse().map_err(|e| input(format!("config '{shown}': {e}")))?;
+    let spec = take_system(&mut table, base)?;
+    resolve_outputs(&mut table, base, output_dir)?;
+    let cfg_text = toml::to_string(&table).map_err(|e| input(format!("config '{shown}': {e}")))?;
+    let cfg =
+        SimConfig::from_toml_str(&cfg_text).map_err(|e| input(format!("config '{shown}': {e}")))?;
+    Ok(Loaded { spec, cfg })
 }
 
 /// Removes and parses the `[system]` table.
@@ -100,7 +142,11 @@ fn take_system(table: &mut toml::Table, base: &Path) -> Result<SystemSpec, CliEr
         .ok_or_else(|| input("config has no [system] table (set `structure` or `cubic_cells`)"))?;
     let sys = value.as_table().ok_or_else(|| input("[system] must be a table"))?;
     if let Some(key) = sys.keys().find(|k| !SYSTEM_KEYS.contains(&k.as_str())) {
-        return Err(input(format!("unknown key '{key}' in [system]")));
+        let expected: Vec<String> = SYSTEM_KEYS.iter().map(|k| format!("`{k}`")).collect();
+        return Err(input(format!(
+            "unknown key '{key}' in [system] (expected one of {})",
+            expected.join(", ")
+        )));
     }
     match (sys.get("structure"), sys.get("cubic_cells")) {
         (Some(path), None) => {
@@ -171,7 +217,7 @@ fn resolve_outputs(
 }
 
 /// Builds the starting system from a structure file or a cubic lattice.
-fn build_system(spec: &SystemSpec) -> Result<System, CliError> {
+pub(crate) fn build_system(spec: &SystemSpec) -> Result<System, CliError> {
     match spec {
         SystemSpec::Structure(path) => read_structure(path),
         SystemSpec::Cubic { cells, spacing, mass } => {
@@ -233,13 +279,13 @@ fn cubic_lattice(cells: usize, spacing: f64, mass: f64) -> Result<System, CliErr
     Ok(system)
 }
 
-/// Runs `nsteps` steps, calling each observer at its own interval and printing
-/// a progress line about every tenth of the run.
+/// Runs `nsteps` steps, calling each observer at its own interval. With `show_steps`,
+/// prints a line about every tenth of the run.
 fn integrate(
     sim: &mut Simulation,
     observers: &mut [Box<dyn Observer>],
     nsteps: u64,
-    quiet: bool,
+    show_steps: bool,
 ) -> Result<RunSummary, CliError> {
     let started = Instant::now();
     let initial = sim.energies();
@@ -249,7 +295,7 @@ fn integrate(
     for _ in 0..nsteps {
         sim.advance().map_err(sim_err)?;
         emit(sim, observers)?;
-        if !quiet && (sim.step.is_multiple_of(every) || sim.step == nsteps) {
+        if show_steps && (sim.step.is_multiple_of(every) || sim.step == nsteps) {
             let pct = 100 * sim.step / nsteps.max(1);
             eprintln!("step {}/{nsteps} ({pct}%)", sim.step);
         }

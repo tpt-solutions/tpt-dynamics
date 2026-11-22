@@ -102,10 +102,9 @@ pub(crate) fn run(args: &AnalyzeArgs, quiet: bool) -> Result<(), CliError> {
 /// Checks that the structure file (if any) matches the trajectory's atom count.
 fn check_atoms(weights: Option<&[f64]>, n_atoms: usize) -> Result<(), CliError> {
     match weights {
-        Some(m) if m.len() != n_atoms => Err(input(format!(
-            "structure has {} atoms but the trajectory has {n_atoms}",
-            m.len()
-        ))),
+        Some(m) if m.len() != n_atoms => {
+            Err(input(format!("structure has {} atoms but the trajectory has {n_atoms}", m.len())))
+        }
         _ => Ok(()),
     }
 }

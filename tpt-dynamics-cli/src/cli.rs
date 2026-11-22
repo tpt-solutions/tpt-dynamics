@@ -51,10 +51,16 @@ pub(crate) struct Cli {
 pub(crate) enum Command {
     /// Run a molecular dynamics simulation from a TOML configuration.
     Simulate(SimulateArgs),
-    /// Summarise, filter and histogram a CSV event file.
+    /// Check a simulation configuration without running it.
+    Validate(ValidateArgs),
+    /// Scaffold a runnable project from a built-in template.
+    Init(InitArgs),
+    /// Summarise, filter and histogram an event table (CSV, Parquet or tptdyn binary).
     Analyze(AnalyzeArgs),
     /// Fill a 1D histogram from one CSV column.
     Histogram(HistogramArgs),
+    /// Write a self-contained HTML report (energy, temperature, pressure) for a run.
+    Report(ReportArgs),
     /// Print a shell completion script to stdout.
     Completions {
         /// Target shell.
@@ -81,12 +87,67 @@ pub(crate) struct SimulateArgs {
     /// names, instead of the paths in `[output]`.
     #[arg(long, value_name = "DIR")]
     pub(crate) output_dir: Option<PathBuf>,
+
+    /// After the run, write report.html next to the energy log (see `tptdyn report`).
+    #[arg(long)]
+    pub(crate) report: bool,
+}
+
+/// Arguments of `tptdyn validate`.
+#[derive(Debug, clap::Args)]
+pub(crate) struct ValidateArgs {
+    /// Simulation configuration (TOML) to check. Nothing is run or written.
+    #[arg(value_name = "CONFIG.toml")]
+    pub(crate) sim_config: PathBuf,
+}
+
+/// Arguments of `tptdyn init`.
+#[derive(Debug, clap::Args)]
+pub(crate) struct InitArgs {
+    /// Template to scaffold.
+    #[arg(value_name = "TEMPLATE", value_enum)]
+    pub(crate) template: Template,
+
+    /// Directory to write into (created if missing). Default: the current directory.
+    #[arg(value_name = "DIR", default_value = ".")]
+    pub(crate) dir: PathBuf,
+
+    /// Overwrite files that already exist.
+    #[arg(long)]
+    pub(crate) force: bool,
+}
+
+/// Project templates for `tptdyn init`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
+pub(crate) enum Template {
+    /// Lennard-Jones fluid on a cubic lattice: simulate config with energy and trajectory output.
+    LjFluid,
+    /// Synthetic event CSV generator plus an analyze/histogram command sheet.
+    HepAnalysis,
+}
+
+/// Arguments of `tptdyn report`.
+#[derive(Debug, clap::Args)]
+pub(crate) struct ReportArgs {
+    /// Run directory containing energy.csv. The report is written here unless --out is given.
+    #[arg(value_name = "RUN_DIR")]
+    pub(crate) run_dir: PathBuf,
+
+    /// Trajectory file to summarise (frame count and atoms), relative to `RUN_DIR` if not absolute.
+    #[arg(long, value_name = "FILE")]
+    pub(crate) trajectory: Option<PathBuf>,
+
+    /// Output HTML file. Default: `RUN_DIR/report.html`.
+    #[arg(long, value_name = "FILE")]
+    pub(crate) out: Option<PathBuf>,
 }
 
 /// Arguments of `tptdyn analyze`.
 #[derive(Debug, clap::Args)]
 pub(crate) struct AnalyzeArgs {
-    /// CSV file with a header row (use --no-header otherwise). Not used with --trajectory.
+    /// Event table: CSV with a header row (use --no-header otherwise), a Parquet file,
+    /// or a tptdyn columnar/row-store file. The format is chosen by magic bytes; anything
+    /// else is read as CSV. Not used with --trajectory.
     #[arg(
         value_name = "INPUT.csv",
         required_unless_present = "trajectory",
@@ -96,7 +157,7 @@ pub(crate) struct AnalyzeArgs {
 
     /// Analyse a trajectory file instead of a CSV: writes per-frame RMSD against the
     /// first frame and radius of gyration to --out. Example: --trajectory run.trj
-    #[arg(long, value_name = "FILE", conflicts_with_all = ["filters", "hists"])]
+    #[arg(long, value_name = "FILE", conflicts_with_all = ["filters", "wheres", "hists"])]
     pub(crate) trajectory: Option<PathBuf>,
 
     /// Structure file (.pdb or .gro) for the atom masses used by --trajectory.
@@ -108,18 +169,25 @@ pub(crate) struct AnalyzeArgs {
     #[arg(long, value_name = "FILE", requires = "trajectory")]
     pub(crate) out: Option<PathBuf>,
 
-    /// Field separator (a single ASCII character).
+    /// Field separator for CSV input (a single ASCII character).
     #[arg(long, value_name = "CHAR", default_value_t = ',')]
     pub(crate) delimiter: char,
 
-    /// The first line is data, not a header; columns are named c0, c1, ...
+    /// The first line is data, not a header; columns are named c0, c1, ... (CSV only).
     #[arg(long)]
     pub(crate) no_header: bool,
 
     /// Keep rows where `COLUMN OP VALUE` holds. OP is one of > >= < <= == !=.
     /// Repeat the option to combine filters with AND. Example: --filter 'pt > 20'
+    /// Filters and --where may be combined; every condition must hold.
     #[arg(long = "filter", value_name = "'COLUMN OP VALUE'")]
     pub(crate) filters: Vec<String>,
+
+    /// Keep rows where the EXPR holds. EXPR may use column names, numbers, + - * /,
+    /// comparisons (< <= > >= == !=), and/or/not, and parentheses.
+    /// Repeat the option to combine with AND. Example: --where '(pt > 20 or `n_jets` >= 2) and eta < 2.5'
+    #[arg(long = "where", value_name = "'EXPR'")]
+    pub(crate) wheres: Vec<String>,
 
     /// Write a uniform histogram of COLUMN: COLUMN,BINS,LO,HI. Repeatable.
     /// Example: --hist pt,50,0,100

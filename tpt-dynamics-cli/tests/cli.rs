@@ -8,6 +8,8 @@ use std::path::{Path, PathBuf};
 use std::process;
 
 use tpt_dynamics_data::hist1d::Histogram1D;
+use tpt_dynamics_data::lazy::{Column, DataFrame};
+use tpt_dynamics_data::rowstore::write_rowstore;
 use tpt_dynamics_data::trajectory::{Frame, FrameSink, Precision, TrajectoryWriter};
 use tpt_dynamics_sim::output::read_trajectory;
 
@@ -613,4 +615,221 @@ fn analyze_trajectory_usage_and_input_errors() {
         .args(["--out", out.to_str().unwrap()])
         .assert()
         .code(3);
+}
+
+/// Path of a fixture file under `tests/fixtures`.
+fn fixture(name: &str) -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("fixtures").join(name)
+}
+
+/// A small energy log with known statistics: T = 1, 2, 3 and E = 5, 4.9, 4.8.
+fn write_energy_log(dir: &Path) -> PathBuf {
+    let path = dir.join("energy.csv");
+    fs::write(
+        &path,
+        "step,time,kinetic,potential,total,temperature,pressure\n\
+0,0.0,10.0,-5.0,5.0,1.0,2.0\n\
+10,0.02,10.0,-5.1,4.9,2.0,3.0\n\
+20,0.04,10.0,-5.2,4.8,3.0,4.0\n",
+    )
+    .expect("write energy log");
+    path
+}
+
+#[test]
+fn init_scaffolds_templates_and_refuses_overwrite() {
+    let dir = scratch("init");
+    let lj = dir.join("lj");
+    let lj_str = lj.to_str().unwrap();
+    tptdyn().args(["init", "lj-fluid", lj_str, "--quiet"]).assert().success();
+    let cfg = fs::read_to_string(lj.join("simulate.toml")).unwrap();
+    assert!(cfg.contains("cubic_cells = 4"), "template content missing");
+    assert!(lj.join("README.txt").exists());
+
+    // A second init without --force is an input error and leaves files alone.
+    tptdyn()
+        .args(["init", "lj-fluid", lj_str, "--quiet"])
+        .assert()
+        .code(3)
+        .stderr(contains("already exists; use --force"));
+    tptdyn().args(["init", "lj-fluid", lj_str, "--force", "--quiet"]).assert().success();
+
+    let hep = dir.join("hep");
+    tptdyn().args(["init", "hep-analysis", hep.to_str().unwrap(), "--quiet"]).assert().success();
+    let gen = fs::read_to_string(hep.join("make_events.py")).unwrap();
+    assert!(gen.contains("def main"));
+    assert!(fs::read_to_string(hep.join("analyze.txt")).unwrap().contains("--where"));
+}
+
+#[test]
+fn init_refuses_when_any_target_exists() {
+    let dir = scratch("init-partial");
+    fs::write(dir.join("README.txt"), "mine").unwrap();
+    tptdyn().args(["init", "hep-analysis", dir.to_str().unwrap(), "--quiet"]).assert().code(3);
+    // Nothing else was written, and the existing file is untouched.
+    assert!(!dir.join("make_events.py").exists());
+    assert_eq!(fs::read_to_string(dir.join("README.txt")).unwrap(), "mine");
+}
+
+#[test]
+fn validate_accepts_scaffolded_config_and_summarises() {
+    let dir = scratch("validate-ok");
+    tptdyn().args(["init", "lj-fluid", dir.to_str().unwrap(), "--quiet"]).assert().success();
+    let cfg = dir.join("simulate.toml");
+    tptdyn()
+        .args(["validate", cfg.to_str().unwrap()])
+        .assert()
+        .success()
+        .stdout(contains("config ok"))
+        .stdout(contains("atoms         64"))
+        .stdout(contains("2000"))
+        .stdout(contains("MB"));
+    assert!(!dir.join("energy.csv").exists(), "validate must not run the simulation");
+}
+
+#[test]
+fn validate_suggests_closest_key_for_typo() {
+    let dir = scratch("validate-typo");
+    let cfg = tiny_config(&dir, "0.002", "");
+    let text = fs::read_to_string(&cfg).unwrap().replace("energy_interval", "energy_intervall");
+    fs::write(&cfg, text).unwrap();
+    tptdyn()
+        .args(["validate", cfg.to_str().unwrap()])
+        .assert()
+        .code(3)
+        .stderr(contains("energy_intervall"))
+        .stderr(contains("did you mean `energy_interval`?"));
+}
+
+#[test]
+fn validate_missing_file_is_input_error() {
+    let dir = scratch("validate-missing");
+    let missing = dir.join("nope.toml");
+    tptdyn()
+        .args(["validate", missing.to_str().unwrap()])
+        .assert()
+        .code(3)
+        .stderr(contains("cannot read config"));
+}
+
+#[test]
+fn report_writes_self_contained_html_with_summary() {
+    let dir = scratch("report");
+    write_energy_log(&dir);
+    tptdyn().args(["report", dir.to_str().unwrap(), "--quiet"]).assert().success();
+    let html = fs::read_to_string(dir.join("report.html")).unwrap();
+    assert!(html.contains("<svg"));
+    assert!(html.contains("Mean temperature (K)</th><td>2.0000</td>"), "{html}");
+    assert!(html.contains("Std dev of temperature (K)</th><td>1.0000</td>"));
+    // Final drift: (4.8 - 5.0) / 5.0 = -4 %.
+    assert!(html.contains("Energy drift, final (%)</th><td>-4.0000</td>"));
+    assert!(!html.contains("<script"));
+    assert!(!html.contains("<link"));
+}
+
+#[test]
+fn report_reports_missing_energy_log_as_input_error() {
+    let dir = scratch("report-missing");
+    tptdyn()
+        .args(["report", dir.to_str().unwrap()])
+        .assert()
+        .code(3)
+        .stderr(contains("cannot read energy log"));
+}
+
+#[test]
+fn simulate_report_flag_writes_report_next_to_energy_log() {
+    let dir = scratch("sim-report");
+    let cfg = tiny_config(&dir, "0.002", "");
+    tptdyn().args(["simulate", cfg.to_str().unwrap(), "--quiet", "--report"]).assert().success();
+    let html = fs::read_to_string(dir.join("report.html")).unwrap();
+    assert!(html.contains("<svg"));
+    assert!(html.contains("Energy samples</th><td>6</td>"), "{html}");
+}
+
+/// Runs `analyze` with the given options and checks that the printed row count appears.
+fn assert_rows(csv: &Path, extra: &[&str], rows: &str) {
+    tptdyn()
+        .args(["analyze", csv.to_str().unwrap()])
+        .args(extra)
+        .assert()
+        .success()
+        .stdout(contains(rows));
+}
+
+#[test]
+fn analyze_where_expressions_filter_rows() {
+    let dir = scratch("where");
+    let csv = write_events(&dir);
+    // The data: (x, y) = (0.5,1) (1.5,2) (1.7,3) (2.2,4) (-1,5) (9,6).
+    assert_rows(&csv, &["--where", "x > 1 and y < 5"], "rows: 3 (of 6 read)");
+    assert_rows(&csv, &["--where", "x < 0 or y == 6"], "rows: 2 (of 6 read)");
+    assert_rows(&csv, &["--where", "y * 0.5 > 1.2 and not (x < 0)"], "rows: 3 (of 6 read)");
+    assert_rows(&csv, &["--where", "(x + 1) * 2 > 5 - y"], "rows: 4 (of 6 read)");
+    // "and" binds tighter than "or": this is x < 0 or (x > 1 and y > 5).
+    assert_rows(&csv, &["--where", "x < 0 or x > 1 and y > 5"], "rows: 2 (of 6 read)");
+    // Division by zero is not an error: x / 0 is +inf for x > 0, which passes "> 1000".
+    assert_rows(&csv, &["--where", "x / 0 > 1000"], "rows: 5 (of 6 read)");
+    // 0 / 0 is NaN, and NaN compares false.
+    assert_rows(&csv, &["--where", "0 / 0 > 1"], "rows: 0 (of 6 read)");
+    // Filters and expressions are combined with AND.
+    assert_rows(&csv, &["--filter", "y > 2", "--where", "x < 2"], "rows: 2 (of 6 read)");
+}
+
+#[test]
+fn analyze_where_errors_have_documented_exit_codes() {
+    let dir = scratch("where-errors");
+    let csv = write_events(&dir);
+    tptdyn()
+        .args(["analyze", csv.to_str().unwrap(), "--where", "zz > 1"])
+        .assert()
+        .code(3)
+        .stderr(contains("no column named 'zz'"));
+    tptdyn()
+        .args(["analyze", csv.to_str().unwrap(), "--where", "x > "])
+        .assert()
+        .code(2)
+        .stderr(contains("--where 'x > '"));
+    tptdyn()
+        .args(["analyze", csv.to_str().unwrap(), "--where", "x = 1"])
+        .assert()
+        .code(2)
+        .stderr(contains("use '==' for equality"));
+}
+
+#[test]
+fn analyze_reads_row_store_and_parquet_inputs() {
+    let dir = scratch("binary-inputs");
+    let df = DataFrame::new([
+        ("x", Column::F64(vec![0.5, 1.5, 1.7, 2.2, -1.0, 9.0])),
+        ("y", Column::I64(vec![1, 2, 3, 4, 5, 6])),
+    ])
+    .expect("frame");
+    let rows = dir.join("events.rows");
+    write_rowstore(&rows, &df).expect("write row store");
+    tptdyn()
+        .args(["analyze", rows.to_str().unwrap(), "--where", "x > 1 and y < 5"])
+        .assert()
+        .success()
+        .stdout(contains("rows: 3 (of 6 read)"));
+
+    // A Parquet file from the data crate's fixtures, detected by its PAR1 magic.
+    let parquet = fixture("flat_none_plain.parquet");
+    tptdyn()
+        .args(["analyze", parquet.to_str().unwrap()])
+        .assert()
+        .success()
+        .stdout(contains("rows:"));
+}
+
+#[test]
+fn analyze_rejects_trajectory_given_as_table() {
+    let dir = scratch("analyze-traj");
+    let traj = dir.join("traj.bin");
+    write_test_trajectory(&traj);
+    tptdyn()
+        .args(["analyze", traj.to_str().unwrap()])
+        .assert()
+        .code(3)
+        .stderr(contains("--trajectory"));
 }

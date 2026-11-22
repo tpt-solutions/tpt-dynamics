@@ -1,0 +1,19 @@
+# Command sheet for the synthetic event table. Run from this directory:
+#
+#   python make_events.py            # writes events.csv
+#   sh analyze.txt                   # or copy the lines below one at a time
+
+# Summary of every column (row count, min, max, mean, stddev).
+tptdyn analyze events.csv
+
+# Keep events with pt above 20 GeV and histogram pt into hists/pt.json.
+tptdyn analyze events.csv --filter 'pt > 20' --hist pt,50,0,100 --out-dir hists
+
+# Expression filter: central jets or multi-jet events, histogram eta.
+tptdyn analyze events.csv --where 'eta > -2.5 and eta < 2.5 and (pt > 20 or n_jets >= 2)' --hist eta,50,-2.5,2.5 --out-dir hists
+
+# Histogram pt for events with at least 3 jets, written as binary files.
+tptdyn analyze events.csv --where 'n_jets >= 3' --hist pt,40,0,80 --format bin --out-dir hists
+
+# Single column straight to a histogram file, streamed without loading the table.
+tptdyn histogram events.csv --column pt --bins 50 --range 0,100 --out pt_stream.json

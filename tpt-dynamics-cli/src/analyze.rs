@@ -12,7 +12,9 @@ use tpt_dynamics_data::lazy::{col, Column, DType, DataFrame, Expr, LazyFrame};
 use crate::cli::{AnalyzeArgs, Format};
 use crate::csvin::{csv_err, delimiter_byte, open_csv};
 use crate::error::{input, runtime, usage, CliError};
+use crate::expr::{self, Node, UnknownColumn};
 use crate::histogram::{parse_range, write_histogram};
+use crate::table;
 
 /// Comparison operators accepted by `--filter`.
 #[derive(Clone, Copy, Debug)]
@@ -53,13 +55,11 @@ pub(crate) fn run(args: &AnalyzeArgs, quiet: bool) -> Result<(), CliError> {
     // Parse every argument before touching the input, so usage errors come first.
     let delimiter = delimiter_byte(args.delimiter)?;
     let filters = args.filters.iter().map(|f| parse_filter(f)).collect::<Result<Vec<_>, _>>()?;
+    let wheres = args.wheres.iter().map(|w| parse_where(w)).collect::<Result<Vec<_>, _>>()?;
     let hists = args.hists.iter().map(|h| parse_hist_spec(h)).collect::<Result<Vec<_>, _>>()?;
 
     let path = args.input.as_deref().ok_or_else(|| usage("analyze needs INPUT.csv"))?;
-    let mut reader = open_csv(path, delimiter, !args.no_header)?;
-    // Without a header, column names are `c0, c1, ...`, taken from the first chunk.
-    let mut names: Vec<String> = reader.header().map(<[String]>::to_vec).unwrap_or_default();
-    let mut hist_objs = hists
+    let hists = hists
         .iter()
         .map(|(column, bins, lo, hi)| {
             let hist = Histogram1D::uniform(*bins, *lo, *hi)
@@ -67,44 +67,78 @@ pub(crate) fn run(args: &AnalyzeArgs, quiet: bool) -> Result<(), CliError> {
             Ok((column.clone(), hist))
         })
         .collect::<Result<Vec<_>, CliError>>()?;
+    let mut acc =
+        Accumulator { filters, wheres, hists, summary: Summary::default(), total_rows: 0 };
 
-    // Stream the file in chunks: memory is bounded by CHUNK_ROWS, not by the file size.
-    // Each chunk is filtered, then folded into the summary and the histograms.
-    let mut summary = Summary::default();
-    let mut total_rows = 0usize;
-    loop {
-        let records: Vec<CsvRecord> = reader.next_batch(CHUNK_ROWS).map_err(|e| csv_err(&e))?;
-        if records.is_empty() {
-            break;
-        }
-        if names.is_empty() {
-            names = (0..records[0].len()).map(|i| format!("c{i}")).collect();
-        }
-        total_rows += records.len();
-        let frame = apply_filters(frame_from_records(&names, &records)?, &filters)?;
-        summary.add(&frame);
-        for (column, hist) in &mut hist_objs {
-            for x in column_f64(&frame, column)? {
-                hist.fill(x);
+    // Column names: from the CSV header, or the table's own schema. Without a header,
+    // CSV columns are named `c0, c1, ...`, taken from the first chunk.
+    let names = match table::detect(path)? {
+        table::Kind::Csv => {
+            // Stream the file in chunks: memory is bounded by CHUNK_ROWS, not by the file size.
+            let mut reader = open_csv(path, delimiter, !args.no_header)?;
+            let mut names: Vec<String> =
+                reader.header().map(<[String]>::to_vec).unwrap_or_default();
+            loop {
+                let records: Vec<CsvRecord> =
+                    reader.next_batch(CHUNK_ROWS).map_err(|e| csv_err(&e))?;
+                if records.is_empty() {
+                    break;
+                }
+                if names.is_empty() {
+                    names = (0..records[0].len()).map(|i| format!("c{i}")).collect();
+                }
+                acc.add_chunk(frame_from_records(&names, &records)?)?;
             }
+            names
         }
-    }
-    print_summary(&summary, total_rows, quiet);
+        kind => {
+            // Binary tables are loaded whole; their schema is the column list.
+            let frame = table::load(path, kind)?;
+            let names = frame.names().to_vec();
+            acc.add_chunk(frame)?;
+            names
+        }
+    };
+    print_summary(&acc.summary, acc.total_rows, quiet);
 
-    if let Some((column, _)) = hist_objs.iter().find(|(c, _)| !names.contains(c)) {
+    if let Some((column, _)) = acc.hists.iter().find(|(c, _)| !names.contains(c)) {
         return Err(input(format!("no column named '{column}' in the input")));
     }
-    if !hist_objs.is_empty() {
+    if !acc.hists.is_empty() {
         fs::create_dir_all(&args.out_dir)
             .map_err(|e| runtime(format!("cannot create '{}': {e}", args.out_dir.display())))?;
     }
     let ext = if args.format == Format::Bin { "bin" } else { "json" };
-    for (column, hist) in &hist_objs {
+    for (column, hist) in &acc.hists {
         let path = args.out_dir.join(format!("{}.{ext}", sanitise(column)));
         write_histogram(hist, &path, args.format)?;
         log::info!("histogram of '{column}' written to {}", path.display());
     }
     Ok(())
+}
+
+/// Filters, histograms and summary state shared by every input format.
+struct Accumulator {
+    filters: Vec<FilterSpec>,
+    wheres: Vec<Node>,
+    hists: Vec<(String, Histogram1D)>,
+    summary: Summary,
+    total_rows: usize,
+}
+
+impl Accumulator {
+    /// Filters one chunk of rows, then folds it into the summary and the histograms.
+    fn add_chunk(&mut self, frame: DataFrame) -> Result<(), CliError> {
+        self.total_rows += frame.len();
+        let frame = apply_filters(frame, &self.filters, &self.wheres)?;
+        self.summary.add(&frame);
+        for (column, hist) in &mut self.hists {
+            for x in column_f64(&frame, column)? {
+                hist.fill(x);
+            }
+        }
+        Ok(())
+    }
 }
 
 /// Rows per chunk when streaming a CSV file.
@@ -196,21 +230,37 @@ fn frame_from_records(names: &[String], records: &[CsvRecord]) -> Result<DataFra
         .map_err(|e| input(format!("cannot build table: {e}")))
 }
 
-/// Keeps the rows that satisfy every filter (logical AND), using the lazy
-/// engine. Returns the input unchanged when there are no filters.
-fn apply_filters(frame: DataFrame, filters: &[FilterSpec]) -> Result<DataFrame, CliError> {
-    if filters.is_empty() {
+/// Keeps the rows that satisfy every `--filter` and `--where` (logical AND), using the
+/// lazy engine. Returns the input unchanged when there are no conditions.
+fn apply_filters(
+    frame: DataFrame,
+    filters: &[FilterSpec],
+    wheres: &[Node],
+) -> Result<DataFrame, CliError> {
+    if filters.is_empty() && wheres.is_empty() {
         return Ok(frame);
     }
-    let exprs = filters
+    let mut exprs = filters
         .iter()
         .map(|(column, op, value)| filter_expr(&frame, column, *op, value))
         .collect::<Result<Vec<_>, _>>()?;
+    for node in wheres {
+        let lowered = expr::lower(node, &|name| frame.column(name).is_some()).map_err(
+            |UnknownColumn(name)| input(format!("no column named '{name}' in the input")),
+        )?;
+        exprs.push(lowered);
+    }
     let mut lf = LazyFrame::scan(frame);
     for e in exprs {
         lf = lf.filter(e);
     }
     lf.collect().map_err(|e| input(format!("filter failed: {e}")))
+}
+
+/// Parses the text of one `--where`. Syntax errors are usage errors.
+fn parse_where(text: &str) -> Result<Node, CliError> {
+    expr::parse(text)
+        .map_err(|e| usage(format!("--where '{text}': {} (at column {})", e.message, e.column)))
 }
 
 /// Splits `COLUMN OP VALUE` (whitespace separated) into its three parts.

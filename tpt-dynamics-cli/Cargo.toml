@@ -23,10 +23,27 @@ rayon = "1"
 serde = { version = "1.0.229", features = ["derive"] }
 toml = "1.2.1"
 tpt-dynamics-core = { version = "0.1.0-dev", path = "../tpt-dynamics-core" }
-tpt-dynamics-data = { version = "0.1.0-dev", path = "../tpt-dynamics-data" }
+tpt-dynamics-data = { version = "0.1.0-dev", path = "../tpt-dynamics-data", features = ["parquet"] }
 tpt-dynamics-sim = { version = "0.1.0-dev", path = "../tpt-dynamics-sim" }
 
 [lints]
 workspace = true
+
+# cargo-binstall fetches prebuilt archives from the GitHub release for tag v{version}.
+# Archive names: tptdyn-v{version}-{target}.tar.gz (all targets except Windows) and
+# tptdyn-v{version}-{target}.zip (Windows targets, via the overrides below). The
+# `{ version }` and `{ target }` placeholders are filled in by cargo-binstall.
+[package.metadata.binstall]
+pkg-url = "https://github.com/tpt-solutions/tpt-dynamics/releases/download/v{ version }/tptdyn-v{ version }-{ target }.tar.gz"
+pkg-fmt = "tgz"
+bin-dir = "tptdyn{ binary-ext }"
+
+[package.metadata.binstall.overrides.x86_64-pc-windows-msvc]
+pkg-url = "https://github.com/tpt-solutions/tpt-dynamics/releases/download/v{ version }/tptdyn-v{ version }-{ target }.zip"
+pkg-fmt = "zip"
+
+[package.metadata.binstall.overrides.aarch64-pc-windows-msvc]
+pkg-url = "https://github.com/tpt-solutions/tpt-dynamics/releases/download/v{ version }/tptdyn-v{ version }-{ target }.zip"
+pkg-fmt = "zip"
 
 [dev-dependencies]
