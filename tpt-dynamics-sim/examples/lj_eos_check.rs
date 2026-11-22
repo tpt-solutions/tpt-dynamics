@@ -27,7 +27,7 @@ const RC: f64 = 3.0;
 const CELLS: usize = 6; // 4 * 6^3 = 864 atoms
 const DT: f64 = 0.002;
 const EQUIL: u64 = 5000;
-const PROD_BLOCKS: u64 = 10;
+const DEFAULT_BLOCKS: u64 = 10;
 const STEPS_PER_BLOCK: u64 = 1000;
 const SAMPLE_EVERY: u64 = 10;
 
@@ -75,12 +75,21 @@ fn build_fcc() -> System {
 }
 
 fn main() {
+    // Optional: `--blocks N` (production blocks, default 10) and `--seed-offset K`
+    // (added to the velocity and thermostat seeds, default 0, which reproduces the
+    // committed run). Use several offsets for independent replicas.
+    let args: Vec<String> = std::env::args().collect();
+    let arg_value = |flag: &str| args.iter().position(|a| a == flag).and_then(|i| args.get(i + 1));
+    let blocks: u64 =
+        arg_value("--blocks").map_or(DEFAULT_BLOCKS, |v| v.parse().expect("--blocks N"));
+    let offset: u64 = arg_value("--seed-offset").map_or(0, |v| v.parse().expect("--seed-offset K"));
+
     let mut sys = build_fcc();
     let n = sys.len();
-    maxwell_boltzmann_velocities(&mut sys, T, 42, UnitSystem::Reduced);
+    maxwell_boltzmann_velocities(&mut sys, T, 42 + offset, UnitSystem::Reduced);
     let ff = LennardJones::single_type(1.0, 1.0, RC, Modifier::None).expect("LJ");
     let eval = ForceEvaluator::new(Box::new(ff), 0.3).expect("neighbour list");
-    let thermostat = VRescale::new(T, 0.5, UnitSystem::Reduced, 7).expect("thermostat");
+    let thermostat = VRescale::new(T, 0.5, UnitSystem::Reduced, 7 + offset).expect("thermostat");
     let mut sim = Simulation::new(
         sys,
         eval,
@@ -97,7 +106,7 @@ fn main() {
     let (u_tail, p_tail) = tail_corrections(RHO, RC);
     let mut block_p = Vec::new();
     let mut block_u = Vec::new();
-    for _ in 0..PROD_BLOCKS {
+    for _ in 0..blocks {
         let (mut p_sum, mut u_sum, mut count) = (0.0, 0.0, 0u64);
         for s in 0..STEPS_PER_BLOCK {
             sim.advance().expect("step");
@@ -118,9 +127,9 @@ fn main() {
     println!("LJ fluid, N = {n}, rho* = {RHO}, T* = {T}, rc = {RC} sigma (truncated + LRC)");
     println!(
         "run: {EQUIL} equilibration + {} production steps in {elapsed:.1} s",
-        PROD_BLOCKS * STEPS_PER_BLOCK
+        blocks * STEPS_PER_BLOCK
     );
-    println!("P*  = {p_mean:.4} +/- {p_err:.4}  (block SEM, {PROD_BLOCKS} blocks)");
+    println!("P*  = {p_mean:.4} +/- {p_err:.4}  (block SEM, {blocks} blocks)");
     println!("U*/N = {u_mean:.4} +/- {u_err:.4}");
     println!("tail corrections: U_tail/N = {u_tail:.4}, P_tail = {p_tail:.4}");
     assert!(p_mean.is_finite() && u_mean.is_finite(), "non-finite result");
