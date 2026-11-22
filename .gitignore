@@ -34,6 +34,8 @@ Thumbs.db
 *.tpr
 *.zarr/
 data/
+# The crate's synthetic force-field file is test input, not output; keep it tracked.
+!/tpt-dynamics-sim/data/
 /output/
 
 # Misc

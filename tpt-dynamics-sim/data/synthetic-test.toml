@@ -1,0 +1,69 @@
+# SYNTHETIC TEST PARAMETERS. NOT A PUBLISHED FORCE FIELD.
+#
+# Every number in this file was chosen by the tpt-dynamics authors for unit
+# tests of the topology builder and bonded/non-bonded terms. It is not taken
+# from, fitted to, or equivalent to AMBER, CHARMM, GROMOS, OPLS or any other
+# published parameter set, and it must not be used for production simulations.
+#
+# Format: see the module documentation of tpt_dynamics_sim::ffparams.
+
+name = "SYNTHETIC-TEST"
+format_version = 1
+fudge_lj = 0.5
+fudge_qq = 0.8333
+
+[[atomtype]]
+name = "CT"
+mass = 12.011
+sigma = 0.34
+epsilon = 0.36
+
+[[atomtype]]
+name = "HC"
+mass = 1.008
+sigma = 0.26
+epsilon = 0.10
+
+[[bondtype]]
+types = ["CT", "CT"]
+k = 220000.0
+r0 = 0.153
+
+[[bondtype]]
+types = ["CT", "HC"]
+k = 280000.0
+r0 = 0.109
+
+[[angletype]]
+types = ["CT", "CT", "CT"]
+k = 520.0
+theta0 = 112.7
+
+[[angletype]]
+types = ["HC", "CT", "CT"]
+k = 400.0
+theta0 = 110.0
+urey_bradley_k = 2000.0
+urey_bradley_r0 = 0.18
+
+[[dihedraltype]]
+types = ["*", "CT", "CT", "*"]
+terms = [
+  { k = 1.3, n = 3, phase = 0.0 },
+]
+
+[[impropertype]]
+types = ["CT", "*", "*", "HC"]
+k = 50.0
+xi0 = 0.0
+
+# Four-carbon chain in an all-trans zigzag (approximate geometry, nm).
+[[molecule]]
+name = "butane"
+atoms = [
+  { name = "C1", type = "CT", charge = 0.0, position = [0.0, 0.0, 0.0] },
+  { name = "C2", type = "CT", charge = 0.0, position = [0.153, 0.0, 0.0] },
+  { name = "C3", type = "CT", charge = 0.0, position = [0.21204, 0.14117, 0.0] },
+  { name = "C4", type = "CT", charge = 0.0, position = [0.36504, 0.14117, 0.0] },
+]
+bonds = [[0, 1], [1, 2], [2, 3]]
