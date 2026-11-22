@@ -46,10 +46,17 @@ jobs:
 
       - name: tptdyn analyze (timed)
         run: |
+          # Exit 127 means the binary was not found or could not load. Check for it
+          # explicitly, and print the captured output on failure: the redirect below
+          # would otherwise hide the shell's own error message in the log.
+          test -x ./target/release/tptdyn || { echo "tptdyn not found"; ls -la target/release; exit 1; }
           start=$(date +%s.%N)
-          ./target/release/tptdyn analyze "$RUNNER_TEMP/events-10gb.csv" --filter "pt > 5" \
+          if ! ./target/release/tptdyn analyze "$RUNNER_TEMP/events-10gb.csv" --filter "pt > 5" \
             --hist pt,100,0,100 --hist eta,100,-5,5 --out-dir "$RUNNER_TEMP/analysis-10gb" \
-            > tptdyn-analyze.txt 2>&1
+            > tptdyn-analyze.txt 2>&1; then
+            cat tptdyn-analyze.txt
+            exit 1
+          fi
           end=$(date +%s.%N)
           echo "tptdyn_wall_s=$(python3 -c "print(round($end-$start,1))")" | tee -a tptdyn-analyze.txt
 
