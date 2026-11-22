@@ -62,3 +62,16 @@ Warnings (no failure): `unmatched-source` for `allow-git` (no git dependencies);
 2. Licence strings are the `license` field of each manifest. Each is matched against ADR-005.
 3. Scope: reachability from the workspace members. `normal` follows normal edges only. `build` is reached through normal and build edges, and is not reached by normal edges alone. `dev` is whatever remains reachable through the resolve graph.
 4. `cargo deny check` and `cargo tree -i windows-sys --target x86_64-pc-windows-msvc -e normal` were run for the zero-FFI check.
+
+## OpenMM (reference tool, not shipped), checked 2026-11-23
+
+- `openmm` 8.6.1 is used only by `tpt-dynamics-sim/validation/openmm_chain_reference.py`
+  to generate fixtures. It is not a Rust dependency and is not distributed with the crates.
+- Upstream (`github.com/openmm/openmm`, README and `docs-source/licenses/Licenses.txt`):
+  the API, reference and CPU platforms are MIT; the CUDA and OpenCL platforms are LGPL.
+  Third-party components have their own terms (BSD-style, zlib-style, CC BY 3.0 for
+  PdbxReader, MIT for VkFFT).
+- The PyPI metadata for `openmm` 8.6.1 states `Python Software Foundation License (BSD-like)`
+  and has no classifiers. That does not match upstream and was not investigated further.
+- Conclusion: no action needed for the crates. Before any fixture-generation tool is shipped,
+  record which OpenMM platforms are used and confirm the licence from the upstream files.
