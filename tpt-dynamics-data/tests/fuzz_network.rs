@@ -52,8 +52,7 @@ fn sample_store_bytes() -> Vec<u8> {
     // per call; otherwise one test's `remove_file` can delete another's file.
     static NEXT: AtomicUsize = AtomicUsize::new(0);
     let n = NEXT.fetch_add(1, Ordering::Relaxed);
-    let path = std::env::temp_dir()
-        .join(format!("tpt-fuzz-net-{}-{n}.rows", std::process::id()));
+    let path = std::env::temp_dir().join(format!("tpt-fuzz-net-{}-{n}.rows", std::process::id()));
     write_rowstore(&path, &sample_frame()).expect("write");
     let bytes = std::fs::read(&path).expect("read");
     let _ = std::fs::remove_file(path);
