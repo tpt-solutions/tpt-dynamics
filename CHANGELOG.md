@@ -9,6 +9,11 @@ the project uses [Semantic Versioning](https://semver.org/) once it reaches 0.1.
 
 ### Added
 
+- `tptdyn validate` prints an estimate of non-bonded pair evaluations per step
+  and over the run, from the uniform-density cutoff-sphere count.
+- Python `run_simulation` writes the `energy_file` and `trajectory_file` named in
+  the TOML `[output]` table, at their configured intervals, as `tptdyn simulate` does.
+- Security policy (`SECURITY.md`) and Code of Conduct (`CODE_OF_CONDUCT.md`).
 - Cargo workspace with six members: `tpt-dynamics-core`, `-data`, `-sim`,
   `-compute`, `-cli` and `bindings/tpt-dynamics-py`.
 - `tpt-dynamics-core` (`no_std`): CODATA 2018 physical constants, scalar unit
