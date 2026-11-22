@@ -326,10 +326,18 @@ def run_simulation(
     *,
     format: Literal["gro", "pdb"] = "gro",
     sample_every: int = 1,
+    minimize: bool | None = None,
+    checkpoint_restart: str | None = None,
+    checkpoint_write: str | None = None,
 ) -> dict[str, NDArray[np.float64] | NDArray[np.uint64]]:
     """Runs a simulation from a TOML config and GRO/PDB text.
 
     Returns arrays `step` (uint64), `time`, `kinetic`, `potential`, `total`
     and `temperature` (float64), sampled at step 0 and every `sample_every` steps.
+
+    The keyword arguments override the TOML settings for this call:
+    `minimize` sets `[minimize] enabled`; `checkpoint_restart` restores the
+    state from that file before the run (sampling then starts at the
+    checkpoint's step); `checkpoint_write` writes the final state to that file.
     """
     ...

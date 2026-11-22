@@ -40,3 +40,6 @@ data/
 .env
 *.log
 tpt-dynamics-sim/validation/generated/
+
+# Debug symbols emitted next to Python extension modules
+*.pdb

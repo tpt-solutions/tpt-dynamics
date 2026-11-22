@@ -31,19 +31,48 @@ pub(crate) fn validate_config(config: &str) -> PyResult<()> {
 /// Energies are sampled at step 0 and then every `sample_every` steps. The
 /// returned dict has the keys `step`, `time`, `kinetic`, `potential`, `total`
 /// and `temperature`, each a 1D numpy array (energies in kJ/mol, time in ps).
+///
+/// The optional keyword arguments override the matching TOML settings for this
+/// call: `minimize` sets `[minimize] enabled`, `checkpoint_restart` sets
+/// `[checkpoint] restart` (the run then starts from that state, and the first
+/// sampled step is the checkpoint's step), and `checkpoint_write` sets
+/// `[checkpoint] write`, so the final state is written to that file.
 #[pyfunction]
-#[pyo3(signature = (config, structure, *, format="gro", sample_every=1))]
+#[pyo3(signature = (
+    config,
+    structure,
+    *,
+    format="gro",
+    sample_every=1,
+    minimize=None,
+    checkpoint_restart=None,
+    checkpoint_write=None
+))]
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn run_simulation<'py>(
     py: Python<'py>,
     config: &str,
     structure: &str,
     format: &str,
     sample_every: u64,
+    minimize: Option<bool>,
+    checkpoint_restart: Option<String>,
+    checkpoint_write: Option<String>,
 ) -> PyResult<Bound<'py, PyDict>> {
     if sample_every == 0 {
         return Err(PyValueError::new_err("sample_every must be at least 1"));
     }
-    let cfg = SimConfig::from_toml_str(config).map_err(sim_err)?;
+    let mut cfg = SimConfig::from_toml_str(config).map_err(sim_err)?;
+    if let Some(on) = minimize {
+        cfg.minimize.enabled = on;
+    }
+    if let Some(path) = checkpoint_restart {
+        cfg.checkpoint.restart = Some(path.into());
+    }
+    if let Some(path) = checkpoint_write {
+        cfg.checkpoint.write = Some(path.into());
+    }
+    cfg.validate().map_err(sim_err)?;
     let reader = Cursor::new(structure.as_bytes());
     let system = match format {
         "gro" => gro::read_gro(reader).map_err(sim_err)?,
@@ -63,6 +92,8 @@ pub(crate) fn run_simulation<'py>(
             samples.push(sim.energies());
         }
     }
+
+    cfg.write_checkpoint(&mut sim).map_err(sim_err)?;
 
     let out = PyDict::new(py);
     let steps: Vec<u64> = samples.iter().map(|e| e.step).collect();

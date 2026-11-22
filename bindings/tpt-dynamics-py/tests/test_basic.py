@@ -310,3 +310,29 @@ def test_run_simulation_errors() -> None:
         td.run_simulation(MD_CONFIG, _lattice_gro(), sample_every=0)
     with pytest.raises(ValueError):
         td.run_simulation("dt = -1.0\n", _lattice_gro())
+
+
+def test_run_simulation_minimize_and_checkpoint_restart(tmp_path: Path) -> None:
+    gro = _lattice_gro()
+    ckpt = str(tmp_path / "state.ckpt")
+    first = td.run_simulation(MD_CONFIG, gro, minimize=True, checkpoint_write=ckpt)
+    assert first["step"].shape == (21,)
+    assert np.all(np.isfinite(first["total"]))
+    assert Path(ckpt).stat().st_size > 0
+
+    resumed = td.run_simulation(MD_CONFIG, gro, checkpoint_restart=ckpt)
+    assert resumed["step"][0] == 20
+    assert resumed["total"][0] == pytest.approx(first["total"][-1], rel=1e-9)
+
+
+def test_run_simulation_new_option_errors(tmp_path: Path) -> None:
+    gro = _lattice_gro()
+    with pytest.raises(ValueError):
+        td.run_simulation(MD_CONFIG, gro, minimize=True, checkpoint_restart=str(tmp_path / "x"))
+    with pytest.raises(ValueError):
+        td.run_simulation(
+            MD_CONFIG + "\n[constraints]\nkind = \"settle\"\nwater = \"tip4p\"\nmolecules = [[0, 1, 2]]\n",
+            gro,
+        )
+    with pytest.raises(ValueError):
+        td.run_simulation(MD_CONFIG, gro, checkpoint_restart=str(tmp_path / "missing.ckpt"))
