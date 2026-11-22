@@ -35,7 +35,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
 
       - name: Build tptdyn and the event generator
-        run: cargo build --release -p tpt-dynamics-cli -p tpt-dynamics-data --examples
+        # --bins is needed: with --examples alone, cargo builds only the examples and
+        # skips the tptdyn binary, so target/release/tptdyn is never produced.
+        run: cargo build --release -p tpt-dynamics-cli -p tpt-dynamics-data --bins --examples
 
       - name: Generate the 10 GB event CSV
         run: |
