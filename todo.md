@@ -215,7 +215,7 @@ Legend: `- [ ]` todo · `- [x]` done · **bold** = milestone
 
 ### Release
 - [x] Documentation site and tutorials
-- [x] Examples directory (HEP analysis, LJ fluid, water box)
+- [ ] Examples directory (HEP analysis, LJ fluid, water box) — HEP analysis and LJ fluid exist; no water-box example yet, because it needs a water ffparams file and no parameter set is bundled (owner decision)
 - [ ] Benchmarks vs GROMACS and ROOT published
 - [ ] Final `cargo deny check` and full-tree licence review — `cargo deny check` passes; full-tree review updated in `docs/audit/licence-review.md` (2026-11-20). Open: owner decision on the Windows-only `windows-sys` exception (finding 1)
 - [ ] Final `cargo publish --dry-run` for all crates — core, data and compute pass; sim and cli fail until their upstream crates are on crates.io (expected). LICENSE-MIT, LICENSE-APACHE and NOTICE are now copied into all five publishable crates
@@ -305,25 +305,25 @@ Legend: `- [ ]` todo · `- [x]` done · **bold** = milestone
 - [x] Commit `sim/src/output/sink.rs` and anchor the `.gitignore` `output/` rule (clean checkouts failed to build)
 - [x] Fix `simulate` -> `analyze --trajectory` format mismatch: `analyze` detects the format from magic bytes; opt-in `output.trajectory_format = "chunked"` streams via `FrameSinkObserver` (default stays `"plain"` for compatibility)
 - [x] CLI end-to-end test: `simulate` then `analyze --trajectory` on both formats (`simulate_output_round_trips_through_analyze`)
-- [ ] Untrack `bindings/tpt-dynamics-py/python/tpt_dynamics/_tpt_dynamics.pdb` and ignore `*.pdb` build artefacts
-- [ ] Add the missing `SECURITY.md` and `CODE_OF_CONDUCT.md` (Phase 0 marks them done but they do not exist)
-- [ ] Refresh stale docs: root `README.md`, `tpt-dynamics-data/README.md`, `CHANGELOG.md` ("other subcommands not yet implemented"), `docs/tutorials/hep-analysis.md` (lazy fill is connected), comment in `tpt-dynamics-data/tests/distributed_merge.rs`, `tpt-dynamics-sim/src/lib.rs` (barostat list, "placeholder")
-- [ ] Deduplicate `sim/src/crc32.rs` with `data/src/crc32.rs`
-- [ ] Triclinic boxes in GRO and PDB readers (`gro.rs`, `pdb.rs`)
-- [ ] TIP4P virtual-site force redistribution (`water.rs`), with force-conservation test
+- [x] Untrack `bindings/tpt-dynamics-py/python/tpt_dynamics/_tpt_dynamics.pdb` and ignore `*.pdb` build artefacts
+- [x] Add the missing `SECURITY.md` and `CODE_OF_CONDUCT.md` (Phase 0 marks them done but they do not exist)
+- [x] Refresh stale docs: root `README.md`, `tpt-dynamics-data/README.md`, `CHANGELOG.md` ("other subcommands not yet implemented"), `docs/tutorials/hep-analysis.md` (lazy fill is connected), comment in `tpt-dynamics-data/tests/distributed_merge.rs`, `tpt-dynamics-sim/src/lib.rs` (barostat list, "placeholder")
+- [x] Deduplicate `sim/src/crc32.rs` with `data/src/crc32.rs`
+- [x] Triclinic boxes in GRO and PDB readers (`gro.rs`, `pdb.rs`)
+- [ ] TIP4P virtual-site force redistribution (`water.rs`), with force-conservation test — the M-site placement and force-spreading helpers and their tests are in `water.rs`; still open: the simulation does not yet place M-sites, carry their charge in the nonbonded and PME terms, exclude them within the molecule, or spread their forces, so `WaterModel::Tip4p` stays unsupported
 
 ### 9b. User-facing features
-- [ ] Expose full MD in TOML config (force field/bonded terms, thermostat, barostat, constraints, PME, minimise-first, checkpoint/restart); mirror in Python `run_simulation` with trajectory output
-- [ ] `tptdyn init <template>` scaffolding (lj-fluid, water-box, hep-analysis)
-- [ ] `tptdyn validate CONFIG.toml` (semantic checks, "did you mean" for unknown keys, cost estimate, exit code 3)
-- [ ] Live progress bar with ETA and ns/day (respects `-q` and non-TTY)
-- [ ] `tptdyn report` / `simulate --report`: self-contained HTML run report (energy drift, T, P, RDF)
-- [ ] `tptdyn analyze`: expression filters (and/or/not, arithmetic, parentheses) on the lazy optimizer; keep old `COL OP VAL`
-- [ ] `tptdyn analyze`: Parquet, columnar and rowstore inputs
+- [x] Expose full MD in TOML config (force field/bonded terms, thermostat, barostat, constraints, PME, minimise-first, checkpoint/restart); mirror in Python `run_simulation` with trajectory output
+- [ ] `tptdyn init <template>` scaffolding (lj-fluid, water-box, hep-analysis) — `lj-fluid` and `hep-analysis` are done; `water-box` is missing and needs an owner decision (see Phase 4 Examples)
+- [x] `tptdyn validate CONFIG.toml` (semantic checks, "did you mean" for unknown keys, cost estimate, exit code 3)
+- [x] Live progress bar with ETA and ns/day (respects `-q` and non-TTY)
+- [x] `tptdyn report` / `simulate --report`: self-contained HTML run report (energy drift, T, P, RDF)
+- [x] `tptdyn analyze`: expression filters (and/or/not, arithmetic, parentheses) on the lazy optimizer; keep old `COL OP VAL`
+- [x] `tptdyn analyze`: Parquet, columnar and rowstore inputs
 
 ### 9c. Adoption tooling
-- [ ] `release.yml`: tag-triggered prebuilt `tptdyn` binaries (Linux x86_64/aarch64, macOS aarch64, Windows x86_64) with checksums and GitHub Release; publish steps manual and approval-gated
-- [ ] `cargo-binstall` metadata, `install.sh` / `install.ps1`, draft Homebrew and winget manifests under `packaging/`
-- [ ] Root README quickstart and top-level `examples/` with sample configs
-- [ ] Build `docs/site` in CI (fail on drift) and deploy to GitHub Pages
-- [ ] `.devcontainer/` and a multi-stage `Dockerfile`; CI builds the image and `embedded-demo`
+- [x] `release.yml`: tag-triggered prebuilt `tptdyn` binaries (Linux x86_64/aarch64, macOS aarch64, Windows x86_64) with checksums and GitHub Release; publish steps manual and approval-gated
+- [x] `cargo-binstall` metadata, `install.sh` / `install.ps1`, draft Homebrew and winget manifests under `packaging/`
+- [x] Root README quickstart and top-level `examples/` with sample configs
+- [x] Build `docs/site` in CI (fail on drift) and deploy to GitHub Pages
+- [x] `.devcontainer/` and a multi-stage `Dockerfile`; CI builds the image and `embedded-demo`
