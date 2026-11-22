@@ -10,7 +10,14 @@
 //! # cubic_cells = 3         # a cubic lattice of cubic_cells^3 identical atoms,
 //! # spacing = 1.6           # nm between sites (required with cubic_cells)
 //! # mass = 1.0              # amu for lattice atoms (default 1.0)
+//! # params = "water.toml"    # ffparams file, with molecule, grid and spacing:
+//! # molecule = "SOL"        # copies of one ffparams molecule template
+//! # grid = [8, 8, 8]        # copies along x, y, z
+//! # spacing = 0.31          # nm between grid sites; the box is grid * spacing
 //! ```
+//!
+//! The molecule form needs `[forcefield] kind = "bonded"`. Its `params` file also
+//! supplies the force field, so `[forcefield] params` is set from it.
 //!
 //! Relative paths in the file resolve against the directory that contains it.
 //! With `--output-dir`, the energy and trajectory files are written into that
@@ -23,6 +30,7 @@ use std::time::Instant;
 
 use tpt_dynamics_core::Vec3;
 use tpt_dynamics_sim::config::SimConfig;
+use tpt_dynamics_sim::ffparams::ParamSet;
 use tpt_dynamics_sim::gro::read_gro;
 use tpt_dynamics_sim::output::{Observation, Observer};
 use tpt_dynamics_sim::pbc::SimBox;
@@ -49,10 +57,13 @@ pub(crate) enum SystemSpec {
     Structure(PathBuf),
     /// A simple cubic lattice of identical atoms.
     Cubic { cells: usize, spacing: f64, mass: f64 },
+    /// Copies of one ffparams molecule template on a cubic grid; the box is `grid * spacing`.
+    Molecules { params: PathBuf, molecule: String, grid: [usize; 3], spacing: f64 },
 }
 
 /// Keys allowed in the `[system]` table.
-const SYSTEM_KEYS: &[&str] = &["structure", "cubic_cells", "spacing", "mass"];
+const SYSTEM_KEYS: &[&str] =
+    &["structure", "cubic_cells", "spacing", "mass", "params", "molecule", "grid"];
 
 /// Keys of `[output]` that name files.
 const OUTPUT_FILE_KEYS: &[&str] = &["energy_file", "trajectory_file"];
@@ -128,6 +139,18 @@ pub(crate) fn load_config(
     let mut table: toml::Table =
         text.parse().map_err(|e| input(format!("config '{shown}': {e}")))?;
     let spec = take_system(&mut table, base)?;
+    if let SystemSpec::Molecules { params, .. } = &spec {
+        // The ffparams file of the molecule grid is also the force field.
+        let ff = table
+            .entry("forcefield")
+            .or_insert_with(|| toml::Value::Table(toml::Table::new()))
+            .as_table_mut()
+            .ok_or_else(|| input("[forcefield] must be a table"))?;
+        if ff.get("kind").and_then(|v| v.as_str()) != Some("bonded") {
+            return Err(input("[system] molecule needs [forcefield] kind = \"bonded\""));
+        }
+        ff.insert("params".into(), toml::Value::String(params.display().to_string()));
+    }
     resolve_outputs(&mut table, base, output_dir)?;
     let cfg_text = toml::to_string(&table).map_err(|e| input(format!("config '{shown}': {e}")))?;
     let cfg =
@@ -147,6 +170,9 @@ fn take_system(table: &mut toml::Table, base: &Path) -> Result<SystemSpec, CliEr
             "unknown key '{key}' in [system] (expected one of {})",
             expected.join(", ")
         )));
+    }
+    if sys.contains_key("molecule") {
+        return take_molecule_grid(sys, base);
     }
     match (sys.get("structure"), sys.get("cubic_cells")) {
         (Some(path), None) => {
@@ -172,7 +198,7 @@ fn take_system(table: &mut toml::Table, base: &Path) -> Result<SystemSpec, CliEr
                 .ok_or_else(|| input("[system] mass must be a number"))?;
             Ok(SystemSpec::Cubic { cells, spacing, mass })
         }
-        _ => Err(input("[system] needs exactly one of `structure` or `cubic_cells`")),
+        _ => Err(input("[system] needs exactly one of `structure`, `cubic_cells` or `molecule`")),
     }
 }
 
@@ -220,6 +246,9 @@ fn resolve_outputs(
 pub(crate) fn build_system(spec: &SystemSpec) -> Result<System, CliError> {
     match spec {
         SystemSpec::Structure(path) => read_structure(path),
+        SystemSpec::Molecules { params, molecule, grid, spacing } => {
+            build_molecule_grid(params, molecule, *grid, *spacing)
+        }
         SystemSpec::Cubic { cells, spacing, mass } => {
             if !(spacing.is_finite() && *spacing > 0.0) {
                 return Err(input("[system] spacing must be a finite number > 0"));
@@ -230,6 +259,73 @@ pub(crate) fn build_system(spec: &SystemSpec) -> Result<System, CliError> {
             Ok(cubic_lattice(*cells, *spacing, *mass)?)
         }
     }
+}
+
+/// Parses the `molecule` form of `[system]`: a grid of copies of one template.
+fn take_molecule_grid(sys: &toml::Table, base: &Path) -> Result<SystemSpec, CliError> {
+    if ["structure", "cubic_cells", "mass"].iter().any(|k| sys.contains_key(*k)) {
+        return Err(input(
+            "[system] molecule cannot be combined with structure, cubic_cells or mass",
+        ));
+    }
+    let molecule = sys
+        .get("molecule")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| input("[system] molecule must be a template name"))?;
+    let params = sys
+        .get("params")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| input("[system] params (an ffparams file) is required with molecule"))?;
+    let counts = sys
+        .get("grid")
+        .and_then(|v| v.as_array())
+        .filter(|a| a.len() == 3)
+        .ok_or_else(|| input("[system] grid must be [nx, ny, nz]"))?;
+    let mut grid = [0usize; 3];
+    for (slot, v) in grid.iter_mut().zip(counts) {
+        *slot = v
+            .as_integer()
+            .and_then(|n| usize::try_from(n).ok())
+            .filter(|&n| n >= 1)
+            .ok_or_else(|| input("[system] grid counts must be integers >= 1"))?;
+    }
+    let spacing = sys
+        .get("spacing")
+        .and_then(number)
+        .filter(|s| s.is_finite() && *s > 0.0)
+        .ok_or_else(|| input("[system] spacing (nm, > 0) is required with molecule"))?;
+    Ok(SystemSpec::Molecules {
+        params: base.join(params),
+        molecule: molecule.to_owned(),
+        grid,
+        spacing,
+    })
+}
+
+/// Builds the grid of molecule copies from an ffparams file with its topology.
+fn build_molecule_grid(
+    params: &Path,
+    molecule: &str,
+    grid: [usize; 3],
+    spacing: f64,
+) -> Result<System, CliError> {
+    let text = fs::read_to_string(params)
+        .map_err(|e| input(format!("cannot read [system] params '{}': {e}", params.display())))?;
+    let set = ParamSet::from_toml_str(&text).map_err(sim_err)?;
+    let [nx, ny, nz] = grid;
+    let sim_box = SimBox::new(nx as f64 * spacing, ny as f64 * spacing, nz as f64 * spacing)
+        .map_err(sim_err)?;
+    let mut placements: Vec<(&str, Vec3)> = Vec::with_capacity(nx * ny * nz);
+    for i in 0..nx {
+        for j in 0..ny {
+            for k in 0..nz {
+                let at = Vec3::new(i as f64, j as f64, k as f64) * spacing;
+                placements.push((molecule, at));
+            }
+        }
+    }
+    Ok(set.assemble(&placements, sim_box).map_err(sim_err)?.system)
 }
 
 /// Reads a `.gro` or `.pdb` structure file, chosen by extension.

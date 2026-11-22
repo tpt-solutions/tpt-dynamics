@@ -833,3 +833,95 @@ fn analyze_rejects_trajectory_given_as_table() {
         .code(3)
         .stderr(contains("--trajectory"));
 }
+
+/// Synthetic three-site molecule (test numbers, not a published model) for the
+/// `[system] molecule` grid form.
+const SYNTHETIC_WATER: &str = r#"
+name = "SYNTHETIC-WATER-TEST"
+format_version = 1
+
+[[atomtype]]
+name = "OW"
+mass = 15.999
+sigma = 0.315
+epsilon = 0.6
+
+[[atomtype]]
+name = "HW"
+mass = 1.008
+sigma = 0.1
+epsilon = 0.0
+
+[[bondtype]]
+types = ["OW", "HW"]
+k = 300000.0
+r0 = 0.1
+
+[[angletype]]
+types = ["HW", "OW", "HW"]
+k = 400.0
+theta0 = 109.5
+
+[[molecule]]
+name = "SOL"
+atoms = [
+  { name = "OW", type = "OW", charge = -0.8, position = [0.0, 0.0, 0.0] },
+  { name = "HW1", type = "HW", charge = 0.4, position = [0.1, 0.0, 0.0] },
+  { name = "HW2", type = "HW", charge = 0.4, position = [-0.03, 0.095, 0.0] },
+]
+bonds = [[0, 1], [0, 2]]
+"#;
+
+#[test]
+fn molecule_grid_builds_topology_and_runs() {
+    let dir = scratch("molecule-grid");
+    fs::write(dir.join("water.toml"), SYNTHETIC_WATER).unwrap();
+    let cfg = dir.join("grid.toml");
+    fs::write(
+        &cfg,
+        "dt = 0.001\nnsteps = 5\ntemperature = 0.3\n\
+         [system]\nparams = \"water.toml\"\nmolecule = \"SOL\"\ngrid = [4, 4, 4]\nspacing = 0.31\n\
+         [forcefield]\nkind = \"bonded\"\n\
+         [neighbour]\ncutoff = 0.5\nskin = 0.1\n\
+         [constraints]\nkind = \"settle\"\nwater = \"tip3p\"\nmolecules = [[0, 1, 2]]\n",
+    )
+    .unwrap();
+    // 64 molecules of three atoms. The SETTLE list above names only one, which is valid.
+    tptdyn()
+        .args(["validate", cfg.to_str().unwrap()])
+        .assert()
+        .success()
+        .stdout(contains("atoms         192"));
+    tptdyn().args(["simulate", cfg.to_str().unwrap(), "--quiet"]).assert().success();
+}
+
+#[test]
+fn molecule_grid_requires_bonded_force_field_and_params() {
+    let dir = scratch("molecule-grid-errors");
+    fs::write(dir.join("water.toml"), SYNTHETIC_WATER).unwrap();
+    let no_ff = dir.join("no-ff.toml");
+    fs::write(
+        &no_ff,
+        "dt = 0.001\nnsteps = 1\n[system]\nparams = \"water.toml\"\nmolecule = \"SOL\"\n\
+         grid = [2, 2, 2]\nspacing = 0.31\n[neighbour]\ncutoff = 0.5\nskin = 0.1\n",
+    )
+    .unwrap();
+    tptdyn()
+        .args(["validate", no_ff.to_str().unwrap()])
+        .assert()
+        .code(3)
+        .stderr(contains("kind = \"bonded\""));
+    let no_params = dir.join("no-params.toml");
+    fs::write(
+        &no_params,
+        "dt = 0.001\nnsteps = 1\n[system]\nmolecule = \"SOL\"\ngrid = [2, 2, 2]\nspacing = 0.31\n\
+         [forcefield]\nkind = \"bonded\"\n[neighbour]\ncutoff = 0.5\nskin = 0.1\n",
+    )
+    .unwrap();
+    tptdyn()
+        .args(["validate", no_params.to_str().unwrap()])
+        .assert()
+        .code(3)
+        .stderr(contains("params"));
+}
+
