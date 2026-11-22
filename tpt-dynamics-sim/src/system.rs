@@ -1,5 +1,5 @@
 //! The molecular system: per-atom state stored in structure-of-arrays (`SoA`)
-//! layout, the periodic box and a topology placeholder.
+//! layout, the periodic box and the bonded topology.
 //!
 //! Units follow the GROMACS convention: nm, ps, amu, elementary charge, kJ/mol
 //! and Kelvin. With these units `½ m v²` is directly in kJ/mol. Reduced

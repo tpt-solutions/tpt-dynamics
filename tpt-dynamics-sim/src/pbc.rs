@@ -105,6 +105,63 @@ impl SimBox {
         [Vec3::new(l.x, 0.0, 0.0), Vec3::new(xy, l.y, 0.0), Vec3::new(xz, yz, l.z)]
     }
 
+    /// Builds a box from crystallographic cell parameters (lengths in nm, angles
+    /// in degrees) in the lower-triangular GROMACS form.
+    ///
+    /// `alpha` is the angle between `b` and `c`, `beta` between `a` and `c`, and
+    /// `gamma` between `a` and `b`. Angles within 1e-3 degrees of 90 are treated as
+    /// exactly 90, so a right-angled cell gives the same box as [`SimBox::new`].
+    ///
+    /// # Errors
+    /// Returns [`SimError::Invalid`] for invalid lengths, degenerate angles, or a
+    /// cell whose tilts fall outside the reduced range (see [`SimBox::triclinic`]).
+    pub fn from_cell_parameters(
+        a: f64,
+        b: f64,
+        c: f64,
+        alpha: f64,
+        beta: f64,
+        gamma: f64,
+    ) -> Result<Self, SimError> {
+        let right = |x: f64| (x - 90.0).abs() < 1e-3;
+        if right(alpha) && right(beta) && right(gamma) {
+            return Self::new(a, b, c);
+        }
+        for (name, ang) in [("alpha", alpha), ("beta", beta), ("gamma", gamma)] {
+            if !(ang.is_finite() && ang > 0.0 && ang < 180.0) {
+                return Err(SimError::Invalid(format!(
+                    "{name} must be finite and in (0, 180) degrees, got {ang}"
+                )));
+            }
+        }
+        let (ca, cb) = (alpha.to_radians().cos(), beta.to_radians().cos());
+        let (cg, sg) = (gamma.to_radians().cos(), gamma.to_radians().sin());
+        let xy = b * cg;
+        let ly = b * sg;
+        let xz = c * cb;
+        let yz = c * (ca - cb * cg) / sg;
+        let lz2 = c * c - xz * xz - yz * yz;
+        if !(lz2.is_finite() && lz2 > 0.0) {
+            return Err(SimError::Invalid(
+                "cell angles do not describe a valid three-dimensional cell".into(),
+            ));
+        }
+        Self::triclinic(a, ly, lz2.sqrt(), xy, xz, yz)
+    }
+
+    /// Cell angles in degrees `[alpha, beta, gamma]`, with `alpha` between `b`
+    /// and `c`, `beta` between `a` and `c`, and `gamma` between `a` and `b`.
+    pub fn angles_deg(&self) -> [f64; 3] {
+        if self.is_orthorhombic() {
+            return [90.0; 3];
+        }
+        let [a, b, c] = self.vectors();
+        let angle = |u: Vec3, v: Vec3| {
+            (u.dot(v) / (u.norm() * v.norm())).clamp(-1.0, 1.0).acos().to_degrees()
+        };
+        [angle(b, c), angle(a, c), angle(a, b)]
+    }
+
     /// Converts lattice coordinates `s` (multiples of the cell vectors) to Cartesian.
     pub fn cartesian(&self, s: Vec3) -> Vec3 {
         let [a, b, c] = self.vectors();
@@ -272,5 +329,31 @@ mod tests {
             assert!((-1e-12..1.0 + 1e-12).contains(&c), "lattice coordinate {c} not wrapped");
         }
         assert!(b.min_width() > 0.0 && b.min_width() <= b.min_edge() + 1e-12);
+    }
+}
+
+#[cfg(test)]
+mod cell_tests {
+    use super::*;
+
+    #[test]
+    fn right_angles_match_orthorhombic_box_exactly() {
+        let b = SimBox::from_cell_parameters(2.0, 3.0, 4.0, 90.0, 90.0, 90.0).unwrap();
+        assert_eq!(b, SimBox::new(2.0, 3.0, 4.0).unwrap());
+    }
+
+    #[test]
+    fn angles_round_trip_through_cell_parameters() {
+        let b = SimBox::from_cell_parameters(6.0, 4.0, 5.0, 75.0, 80.0, 100.0).unwrap();
+        let [alpha, beta, gamma] = b.angles_deg();
+        assert!((alpha - 75.0).abs() < 1e-9);
+        assert!((beta - 80.0).abs() < 1e-9);
+        assert!((gamma - 100.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn rejects_degenerate_angles() {
+        assert!(SimBox::from_cell_parameters(3.0, 4.0, 5.0, 0.0, 90.0, 90.0).is_err());
+        assert!(SimBox::from_cell_parameters(3.0, 4.0, 5.0, 90.0, 90.0, 180.0).is_err());
     }
 }

@@ -3,9 +3,12 @@
 //! Contents (Phases 2 and 5 of `todo.md`):
 //!
 //! - [`system`]: structure-of-arrays particle state, masses, types, topology.
-//! - [`pbc`]: orthorhombic and triclinic periodic boxes, minimum-image convention.
+//! - [`pbc`]: orthorhombic and triclinic periodic boxes (GROMACS lower-triangular form),
+//!   minimum-image convention. GRO and PDB files with triclinic boxes are read and written.
 //! - [`pdb`] and [`gro`]: fixed-width structure readers and writers.
-//! - [`config`]: TOML run configuration.
+//! - [`config`]: TOML run configuration: integrator, thermostat, barostat, Lennard-Jones or
+//!   bonded (ffparams) force field with optional PME, SHAKE/LINCS/SETTLE constraints,
+//!   minimisation before the run, and checkpoint write/restart. Unknown keys are rejected.
 //! - [`topology`] and [`ffparams`]: bond graph to angles, dihedrals, impropers,
 //!   1-4 pairs and exclusions; TOML force-field parameter files. The shipped
 //!   parameter file is synthetic (see `data/synthetic-test.toml`).
@@ -16,7 +19,7 @@
 //! - [`integrator`]: [`integrator::Integrator`] trait with velocity Verlet and leap-frog.
 //! - [`constraints`]: SHAKE, LINCS-style matrix expansion, SETTLE (rigid water).
 //! - [`thermostat`]: Berendsen, stochastic v-rescale, Nosé–Hoover (chain length 1).
-//! - [`barostat`]: isotropic Berendsen and C-rescale pressure coupling.
+//! - [`barostat`]: isotropic Berendsen, C-rescale and Parrinello–Rahman pressure coupling.
 //! - [`minimize`]: adaptive steepest descent and L-BFGS.
 //! - [`solvate`]: placeholder water grid and ion placement.
 //! - [`checkpoint`]: versioned, CRC-32-protected binary checkpoints (bitwise restart).
@@ -53,7 +56,15 @@ pub mod bonded;
 pub mod checkpoint;
 pub mod config;
 pub mod constraints;
-pub mod crc32;
+/// CRC-32, re-exported from `tpt-dynamics-data`, which holds the only implementation.
+pub mod crc32 {
+    pub use tpt_dynamics_data::crc32::{checksum, Crc32};
+
+    /// CRC-32 of `data`. Same as [`checksum`]; kept for source compatibility.
+    pub fn crc32(data: &[u8]) -> u32 {
+        checksum(data)
+    }
+}
 pub mod domain;
 pub mod error;
 pub mod ffparams;

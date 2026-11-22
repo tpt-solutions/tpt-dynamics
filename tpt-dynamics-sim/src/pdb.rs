@@ -1,13 +1,14 @@
 //! PDB reader and writer (fixed-column format, coordinates in Å).
 //!
 //! Reading:
-//! - `CRYST1` gives the orthorhombic box (required; non-90° angles are rejected).
+//! - `CRYST1` gives the box (required). Cell lengths and angles are converted to the
+//!   lower-triangular triclinic form; angles within 0.001° of 90 give an orthorhombic box.
 //! - `ATOM` and `HETATM` records are both read as atoms. Only the first model is
 //!   read (reading stops at `ENDMDL` or `END`).
 //! - Element comes from columns 77–78 or is guessed from the atom name.
 //! - Masses are looked up from the element; unknown elements are an error.
 //!
-//! Writing emits a `CRYST1` record followed by `ATOM` records (no `HETATM`
+//! Writing emits a `CRYST1` record (with the cell angles) followed by `ATOM` records (no `HETATM`
 //! distinction is kept) and `END`. Serial numbers wrap at 100 000 and residue
 //! numbers at 10 000, as the fixed-width format requires.
 
@@ -70,16 +71,15 @@ pub fn read_pdb_with_limits<R: BufRead>(reader: R, limits: ReadLimits) -> Result
                 let alpha = parse_f64(col(&line, 34, 40), line_no, "alpha")?;
                 let beta = parse_f64(col(&line, 41, 47), line_no, "beta")?;
                 let gamma = parse_f64(col(&line, 48, 54), line_no, "gamma")?;
-                let right_angles = [alpha, beta, gamma].iter().all(|x| (x - 90.0).abs() < 1e-3);
-                if !right_angles {
-                    return Err(SimError::parse(
-                        FORMAT,
-                        line_no,
-                        "non-orthorhombic CRYST1 cell is not supported",
-                    ));
-                }
-                let bx = SimBox::new(angstrom_to_nm(a), angstrom_to_nm(b), angstrom_to_nm(c))
-                    .map_err(|e| SimError::parse(FORMAT, line_no, e.to_string()))?;
+                let bx = SimBox::from_cell_parameters(
+                    angstrom_to_nm(a),
+                    angstrom_to_nm(b),
+                    angstrom_to_nm(c),
+                    alpha,
+                    beta,
+                    gamma,
+                )
+                .map_err(|e| SimError::parse(FORMAT, line_no, e.to_string()))?;
                 sim_box = Some(bx);
             }
             "ATOM" | "HETATM" => {
@@ -173,16 +173,17 @@ fn checked(field: &str, value: f64, width: usize, decimals: usize) -> Result<Str
 /// Returns [`SimError::Invalid`] if a name or coordinate does not fit its
 /// fixed-width field, and [`SimError::Io`] on write failure.
 pub fn write_pdb<W: Write>(mut writer: W, system: &System) -> Result<(), SimError> {
-    let l = system.sim_box.lengths;
+    let l = system.sim_box.vectors();
+    let [alpha, beta, gamma] = system.sim_box.angles_deg();
     writeln!(
         writer,
         "CRYST1{:>9.3}{:>9.3}{:>9.3}{:>7.2}{:>7.2}{:>7.2} {:<11}{:>4}",
-        l.x * 10.0,
-        l.y * 10.0,
-        l.z * 10.0,
-        90.0,
-        90.0,
-        90.0,
+        l[0].norm() * 10.0,
+        l[1].norm() * 10.0,
+        l[2].norm() * 10.0,
+        alpha,
+        beta,
+        gamma,
         "P 1",
         1
     )?;
@@ -345,5 +346,85 @@ mod limit_tests {
         assert!(err.contains("more than 2 atoms"), "{err}");
         let ok = ReadLimits { max_line_bytes: 1 << 20, max_atoms: 3 };
         assert_eq!(read_pdb_with_limits(text.as_bytes(), ok).unwrap().len(), 3);
+    }
+}
+
+#[cfg(test)]
+mod triclinic_tests {
+    use super::*;
+    use crate::system::NewAtom;
+
+    const ATOM: &str =
+        "ATOM      1  OW  SOL A   1      10.000  20.000  30.000  1.00  0.00           O\n";
+
+    fn tri_system() -> System {
+        // Reduced tilts: |xy| <= lx/2, |xz| <= lx/2, |yz| <= ly/2.
+        let mut s = System::new(SimBox::triclinic(3.0, 2.5, 4.0, 1.0, -0.7, 0.4).unwrap());
+        s.push_atom(NewAtom {
+            name: "OW".into(),
+            residue_name: "SOL".into(),
+            residue_id: 1,
+            element: "O".into(),
+            position: Vec3::new(0.5, 1.0, 2.0),
+            velocity: Vec3::ZERO,
+            mass: element_mass("O").unwrap(),
+            charge: 0.0,
+            atom_type: 0,
+        });
+        s
+    }
+
+    #[test]
+    fn triclinic_round_trip_preserves_box_vectors() {
+        let s = tri_system();
+        let mut buf = Vec::new();
+        write_pdb(&mut buf, &s).unwrap();
+        let text = String::from_utf8(buf.clone()).unwrap();
+        assert!(!text.lines().next().unwrap().contains("90.00  90.00  90.00"));
+        let back = read_pdb(&buf[..]).unwrap();
+        // Angles are written with two decimals, so allow about 1e-3 nm of drift.
+        let (va, vb) = (back.sim_box.vectors(), s.sim_box.vectors());
+        for (x, y) in va.iter().zip(&vb) {
+            assert!((*x - *y).norm() < 1e-3, "{x:?} vs {y:?}");
+        }
+        assert!(!back.sim_box.is_orthorhombic());
+    }
+
+    #[test]
+    fn right_angle_cryst1_gives_the_same_box_as_before() {
+        let text = format!(
+            "CRYST1   30.000   40.000   50.000  90.00  90.00  90.00 P 1           1\n{ATOM}END\n"
+        );
+        let s = read_pdb(text.as_bytes()).unwrap();
+        assert_eq!(s.sim_box, SimBox::new(3.0, 4.0, 5.0).unwrap());
+        assert!(s.sim_box.is_orthorhombic());
+        assert_eq!(s.sim_box.angles_deg(), [90.0; 3]);
+    }
+
+    #[test]
+    fn oblique_cryst1_angles_are_converted_to_box_vectors() {
+        // 30, 40, 50 Angstrom with alpha 80, beta 95, gamma 110 degrees.
+        let text = format!(
+            "CRYST1   30.000   40.000   50.000  80.00  95.00 110.00 P 1           1\n{ATOM}END\n"
+        );
+        let s = read_pdb(text.as_bytes()).unwrap();
+        let v = s.sim_box.vectors();
+        assert!((v[0].norm() - 3.0).abs() < 1e-9);
+        assert!((v[1].norm() - 4.0).abs() < 1e-9);
+        assert!((v[2].norm() - 5.0).abs() < 1e-9);
+        let [alpha, beta, gamma] = s.sim_box.angles_deg();
+        assert!((alpha - 80.0).abs() < 1e-9, "alpha {alpha}");
+        assert!((beta - 95.0).abs() < 1e-9, "beta {beta}");
+        assert!((gamma - 110.0).abs() < 1e-9, "gamma {gamma}");
+    }
+
+    #[test]
+    fn unreduced_oblique_cell_is_rejected() {
+        // gamma = 60 degrees gives xy = b cos(gamma) = 20 A, larger than lx/2 = 15 A.
+        let text = format!(
+            "CRYST1   30.000   40.000   50.000  90.00  90.00  60.00 P 1           1\n{ATOM}END\n"
+        );
+        let err = read_pdb(text.as_bytes()).unwrap_err().to_string();
+        assert!(err.contains("tilts must satisfy"), "{err}");
     }
 }
