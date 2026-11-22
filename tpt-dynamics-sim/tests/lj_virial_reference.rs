@@ -102,21 +102,35 @@ fn low_density_pressure_matches_second_virial_theory() {
     sim.run(1500, &mut []).unwrap(); // equilibrate at T
     assert!((sim.energies().temperature - t).abs() < 0.2);
     let samples: u32 = 40_000;
-    let mut sum_p = 0.0;
+    let mut pressures = Vec::with_capacity(samples as usize);
     let mut sum_t = 0.0;
     for _ in 0..samples {
         sim.advance().unwrap();
         let e = sim.energies();
-        sum_p += e.pressure;
+        pressures.push(e.pressure);
         sum_t += e.temperature;
     }
     eprintln!("mean T = {}", sum_t / f64::from(samples));
-    let measured = sum_p / f64::from(samples);
+    let measured = pressures.iter().sum::<f64>() / f64::from(samples);
+    // Block-average the pressure series to estimate the standard error, since
+    // consecutive samples are strongly correlated.
+    let n_blocks = 20usize;
+    let block_len = pressures.len() / n_blocks;
+    let block_means: Vec<f64> = pressures
+        .chunks_exact(block_len)
+        .map(|c| c.iter().sum::<f64>() / block_len as f64)
+        .collect();
+    let bm = block_means.iter().sum::<f64>() / n_blocks as f64;
+    let var = block_means.iter().map(|x| (x - bm).powi(2)).sum::<f64>() / (n_blocks as f64 - 1.0);
+    let stderr_p = (var / n_blocks as f64).sqrt();
     // Compare the second-virial term P/(rho T) - 1 directly. Its size is about 3.6%
     // of P at this density, so a 10% tolerance tests B2 to a few per cent.
     let measured_term = measured / (density * t) - 1.0;
     let predicted_term = b2 * density;
-    eprintln!("B2 = {b2:.5}, B2 rho = {predicted_term:.5}, measured = {measured_term:.5}");
+    let stderr_term = stderr_p / (density * t);
+    eprintln!(
+        "B2 = {b2:.5}, B2 rho = {predicted_term:.5}, measured = {measured_term:.5} +/- {stderr_term:.5} (block SE)"
+    );
     assert!(
         (measured_term - predicted_term).abs() < 0.10 * predicted_term.abs(),
         "measured {measured_term} vs predicted {predicted_term}"
