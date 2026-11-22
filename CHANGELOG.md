@@ -13,6 +13,11 @@ the project uses [Semantic Versioning](https://semver.org/) once it reaches 0.1.
   and over the run, from the uniform-density cutoff-sphere count.
 - Python `run_simulation` writes the `energy_file` and `trajectory_file` named in
   the TOML `[output]` table, at their configured intervals, as `tptdyn simulate` does.
+- `[system]` molecule grid for `tptdyn simulate` and `validate`: copies of one
+  ffparams molecule template on a cubic grid, so bonded force fields (with PME and
+  SETTLE) run from a TOML file. Requires `[forcefield] kind = "bonded"`.
+- `tptdyn init water-box`: a scaffold of 512 rigid water molecules. Its parameter file
+  is supplied by the user, because no parameter set is bundled.
 - Security policy (`SECURITY.md`) and Code of Conduct (`CODE_OF_CONDUCT.md`).
 - Cargo workspace with six members: `tpt-dynamics-core`, `-data`, `-sim`,
   `-compute`, `-cli` and `bindings/tpt-dynamics-py`.

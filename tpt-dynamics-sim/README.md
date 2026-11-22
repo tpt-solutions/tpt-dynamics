@@ -17,6 +17,54 @@ trajectory writer that feeds the `tpt-dynamics-data` frame sink, a
 reproducibility mode (`deterministic = true`), bounded line reading for PDB and
 GRO files (1 MiB lines, 10 million atoms), and parser fuzz tests.
 
+## Quick start
+
+A run is built from a configuration and a system. An empty system cannot be run, so
+real input comes from a PDB or GRO file (or from `System::push_atom`):
+
+```rust
+use tpt_dynamics_sim::config::SimConfig;
+use tpt_dynamics_sim::pbc::SimBox;
+use tpt_dynamics_sim::system::System;
+
+let cfg = SimConfig::from_toml_str("nsteps = 10\ntemperature = 0.7\n").unwrap();
+let sys = System::new(SimBox::new(3.0, 3.0, 3.0).unwrap());
+// An empty system cannot be run; a real system is built from `pdb` or `gro`
+// input or by pushing atoms with `System::push_atom`.
+assert!(cfg.build_simulation(sys).is_err());
+```
+
+From the command line, the [`tptdyn`](../tpt-dynamics-cli/README.md) tool runs a
+configuration against a structure file and writes the energy and trajectory outputs:
+`tptdyn validate` checks a configuration without running it, and `tptdyn simulate`
+runs it.
+
+## Modules
+
+| Module | Contents |
+| --- | --- |
+| `system` | Structure-of-arrays particle state: positions, velocities, forces, masses and types. |
+| `pbc` | Orthorhombic and triclinic periodic boxes in GROMACS lower-triangular form, with the minimum-image convention. |
+| `pdb`, `gro` | Fixed-width structure readers and writers, with bounded line lengths. |
+| `config` | The TOML run configuration (`SimConfig`). Unknown keys are rejected. |
+| `topology`, `ffparams` | Bond graph to angles, dihedrals, impropers, 1-4 pairs and exclusions; TOML force-field parameter files. The shipped parameter file is synthetic. |
+| `bonded` | Harmonic bonds and angles (with Urey–Bradley), periodic dihedrals and impropers. |
+| `nonbonded` | Lennard-Jones with exclusions and scaled 1-4 pairs, and PME Coulomb. |
+| `neighbour` | Cell lists and Verlet lists with a skin, built in parallel with rayon. |
+| `forcefield` | The `ForceField` trait and Lennard-Jones with cutoff, shift or switch. |
+| `integrator` | The `Integrator` trait, with velocity Verlet and leap-frog. |
+| `constraints` | SHAKE, a LINCS-style matrix expansion, and SETTLE for rigid water. |
+| `thermostat`, `barostat` | Berendsen, stochastic v-rescale and Nosé–Hoover thermostats; Berendsen, C-rescale and Parrinello–Rahman barostats. |
+| `minimize` | Adaptive steepest descent and L-BFGS. |
+| `solvate` | Water-grid placement and ion placement. |
+| `checkpoint` | Versioned, CRC-32-protected binary checkpoints. Restart is bitwise. |
+| `output` | Observer hook, the binary trajectory format and the CSV energy log. |
+| `analysis` | RMSD, radius of gyration, hydrogen bonds and the radial distribution function. |
+| `simulation` | The run loop that ties the above together. |
+
+Units follow GROMACS: nm, ps, amu, kJ/mol and K. Reduced Lennard-Jones units
+(σ = ε = m = 1) work equally well.
+
 ## Run configuration
 
 A run is described by a TOML file. Unknown keys are rejected at every level, and
