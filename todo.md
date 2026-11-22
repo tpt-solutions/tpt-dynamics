@@ -296,3 +296,34 @@ Legend: `- [ ]` todo · `- [x]` done · **bold** = milestone
 - [ ] Semver and MSRV policy
 - [ ] Issue triage and roadmap review each phase
 - [ ] Keep docs and benchmarks current
+
+---
+
+## Phase 9 — Stub Fixes, Usability & Adoption (from project review)
+
+### 9a. Fixes and drift
+- [x] Commit `sim/src/output/sink.rs` and anchor the `.gitignore` `output/` rule (clean checkouts failed to build)
+- [ ] Fix `simulate` -> `analyze --trajectory` format mismatch: add `output.trajectory_format = "plain" | "chunked"` (default chunked, via `FrameSinkObserver`); `traj_analysis.rs` sniffs magic and falls back to the plain reader
+- [ ] CLI end-to-end test: `simulate` then `analyze --trajectory` on its own output
+- [ ] Untrack `bindings/tpt-dynamics-py/python/tpt_dynamics/_tpt_dynamics.pdb` and ignore `*.pdb` build artefacts
+- [ ] Add the missing `SECURITY.md` and `CODE_OF_CONDUCT.md` (Phase 0 marks them done but they do not exist)
+- [ ] Refresh stale docs: root `README.md`, `tpt-dynamics-data/README.md`, `CHANGELOG.md` ("other subcommands not yet implemented"), `docs/tutorials/hep-analysis.md` (lazy fill is connected), comment in `tpt-dynamics-data/tests/distributed_merge.rs`, `tpt-dynamics-sim/src/lib.rs` (barostat list, "placeholder")
+- [ ] Deduplicate `sim/src/crc32.rs` with `data/src/crc32.rs`
+- [ ] Triclinic boxes in GRO and PDB readers (`gro.rs`, `pdb.rs`)
+- [ ] TIP4P virtual-site force redistribution (`water.rs`), with force-conservation test
+
+### 9b. User-facing features
+- [ ] Expose full MD in TOML config (force field/bonded terms, thermostat, barostat, constraints, PME, minimise-first, checkpoint/restart); mirror in Python `run_simulation` with trajectory output
+- [ ] `tptdyn init <template>` scaffolding (lj-fluid, water-box, hep-analysis)
+- [ ] `tptdyn validate CONFIG.toml` (semantic checks, "did you mean" for unknown keys, cost estimate, exit code 3)
+- [ ] Live progress bar with ETA and ns/day (respects `-q` and non-TTY)
+- [ ] `tptdyn report` / `simulate --report`: self-contained HTML run report (energy drift, T, P, RDF)
+- [ ] `tptdyn analyze`: expression filters (and/or/not, arithmetic, parentheses) on the lazy optimizer; keep old `COL OP VAL`
+- [ ] `tptdyn analyze`: Parquet, columnar and rowstore inputs
+
+### 9c. Adoption tooling
+- [ ] `release.yml`: tag-triggered prebuilt `tptdyn` binaries (Linux x86_64/aarch64, macOS aarch64, Windows x86_64) with checksums and GitHub Release; publish steps manual and approval-gated
+- [ ] `cargo-binstall` metadata, `install.sh` / `install.ps1`, draft Homebrew and winget manifests under `packaging/`
+- [ ] Root README quickstart and top-level `examples/` with sample configs
+- [ ] Build `docs/site` in CI (fail on drift) and deploy to GitHub Pages
+- [ ] `.devcontainer/` and a multi-stage `Dockerfile`; CI builds the image and `embedded-demo`
