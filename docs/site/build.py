@@ -338,7 +338,10 @@ def collect_pages() -> list[Page]:
         d = REPO / rel_dir
         if not d.is_dir():
             continue
-        for p in sorted(d.glob(pattern)):
+        # Sort by casefolded name: pathlib's own ordering is case-insensitive on
+        # Windows and case-sensitive on POSIX, which reorders nav entries (README.md
+        # first on Linux) and makes the committed HTML fail the CI drift check.
+        for p in sorted(d.glob(pattern), key=lambda q: q.name.casefold()):
             src = p.relative_to(REPO).as_posix()
             pages.append(Page(src, src[len("docs/") : -3] + ".html", section))
     for src in TOP_LEVEL:
