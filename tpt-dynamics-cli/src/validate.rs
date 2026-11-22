@@ -26,6 +26,7 @@ pub(crate) fn run(config_path: &Path) -> Result<(), CliError> {
     let system = build_system(&loaded.spec)?;
     let atoms = system.len();
     let l = system.sim_box.lengths;
+    let volume = system.sim_box.volume();
     // Building the simulation checks the system against the force field settings.
     loaded.cfg.build_simulation(system).map_err(sim_err)?;
 
@@ -38,6 +39,13 @@ pub(crate) fn run(config_path: &Path) -> Result<(), CliError> {
         cfg.nsteps,
         cfg.dt,
         cfg.dt * cfg.nsteps as f64
+    );
+    let per_step = pair_evaluations_per_step(atoms as u64, volume, cfg.neighbour.cutoff);
+    println!(
+        "  cost (est.)   ~{per_step:.2e} pair evaluations per step, ~{:.2e} over the run \
+         (uniform-density estimate, cutoff {} nm)",
+        per_step * cfg.nsteps as f64,
+        cfg.neighbour.cutoff
     );
     if let (Some(every), Some(file)) = (cfg.output.energy_interval, &cfg.output.energy_file) {
         let rows = cfg.nsteps / every.max(1) + 1;
@@ -56,6 +64,17 @@ pub(crate) fn run(config_path: &Path) -> Result<(), CliError> {
         println!("  trajectory    {frames} frames, about {mb:.3} MB{note} -> {}", file.display());
     }
     Ok(())
+}
+
+/// Estimated non-bonded pair evaluations per step: each atom sees the mean number of
+/// neighbours inside the cutoff sphere, `density * 4/3 pi rc^3`, and each pair is counted once.
+fn pair_evaluations_per_step(atoms: u64, volume: f64, cutoff: f64) -> f64 {
+    if volume <= 0.0 {
+        return 0.0;
+    }
+    let density = atoms as f64 / volume;
+    let sphere = 4.0 / 3.0 * std::f64::consts::PI * cutoff.powi(3);
+    atoms as f64 * density * sphere / 2.0
 }
 
 /// Size in bytes of a plain trajectory with `frames` frames of `atoms` atoms.
@@ -162,6 +181,14 @@ mod tests {
         let msg = "unknown field `zzzzzz`, expected `cutoff` or `skin`";
         assert_eq!(unknown_key_hint(msg), None);
         assert_eq!(unknown_key_hint("invalid value for dt"), None);
+    }
+
+    #[test]
+    fn pair_estimate_counts_each_pair_once() {
+        // Density 1 per nm^3, cutoff 1 nm: 4/3 pi neighbours per atom, half that per atom pair.
+        let got = pair_evaluations_per_step(1000, 1000.0, 1.0);
+        assert!((got - 1000.0 * 4.0 / 3.0 * std::f64::consts::PI / 2.0).abs() < 1e-9);
+        assert_eq!(pair_evaluations_per_step(10, 0.0, 1.0), 0.0);
     }
 
     #[test]
