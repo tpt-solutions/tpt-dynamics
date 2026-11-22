@@ -22,10 +22,10 @@ repository = "https://github.com/tpt-solutions/tpt-dynamics"
 libm = "0.2"
 
 # MIT replacement for the upstream `target-lexicon` (Apache-2.0 WITH LLVM-exception),
-# which PyO3's build configuration depends on. Local path for now; switch to a
-# git `rev` once the crate is pushed to github.com/tpt-solutions.
+# which PyO3's build configuration depends on. Vendored in-tree (vendor/target-lexicon-mit,
+# copied from its own repository) so that CI and clones build without a sibling checkout.
 [patch.crates-io]
-target-lexicon = { path = "../target-lexicon-mit" }
+target-lexicon = { path = "vendor/target-lexicon-mit" }
 
 [workspace.lints.rust]
 # Unsafe code is forbidden by default. Any exception must be documented in an ADR

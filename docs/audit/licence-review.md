@@ -75,3 +75,11 @@ Warnings (no failure): `unmatched-source` for `allow-git` (no git dependencies);
   and has no classifiers. That does not match upstream and was not investigated further.
 - Conclusion: no action needed for the crates. Before any fixture-generation tool is shipped,
   record which OpenMM platforms are used and confirm the licence from the upstream files.
+
+## target-lexicon replacement, vendored 2026-11-23
+
+- The build dependency `target-lexicon` (upstream `Apache-2.0 WITH LLVM-exception`) is
+  replaced through `[patch.crates-io]` by `vendor/target-lexicon-mit`, an MIT-licensed
+  API-compatible subset written for this project (`LICENSE-MIT`, Copyright (c) 2026 TPT
+  Solutions). It is vendored in the repository so CI and fresh clones build without a
+  sibling checkout. The earlier path (`../target-lexicon-mit`) only worked on the development machine.
